@@ -1,7 +1,167 @@
-<h1>Báo cáo phân tích Log pfSense - {hostname}</h1>
-<p>Xin chào,</p>
-<p>Dưới đây là báo cáo phân tích tự động các log kể từ lần chạy cuối cùng (hoặc trong <strong>{hours}</strong> giờ vừa qua cho lần chạy đầu tiên).</p>
-<hr>
-{analysis_result}
-<hr>
-<p><em>Đây là email được gửi tự động từ hệ thống giám sát.</em></p>
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Báo cáo Phân tích Log pfSense</title>
+    <style>
+        /* Basic styles */
+        body {{
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f7f6;
+            -webkit-font-smoothing: antialiased;
+        }}
+        table {{
+            border-collapse: collapse;
+        }}
+        .container {{
+            width: 100%;
+            max-width: 680px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+        }}
+        .header {{
+            padding: 30px;
+            text-align: center;
+            border-bottom: 1px solid #e0e0e0;
+        }}
+        .content {{
+            padding: 30px;
+            color: #333333;
+            line-height: 1.6;
+            font-size: 15px;
+        }}
+        .footer {{
+            background-color: #f8f9fa;
+            color: #888888;
+            padding: 20px;
+            text-align: center;
+            font-size: 12px;
+            border-bottom-left-radius: 8px;
+            border-bottom-right-radius: 8px;
+        }}
+        .card {{
+            border: 1px solid #e0e0e0;
+            border-radius: 5px;
+            margin-top: 30px;
+            overflow: hidden;
+        }}
+        .card-header {{
+            background-color: #f7f7f7;
+            padding: 12px 20px;
+            border-bottom: 1px solid #e0e0e0;
+            font-weight: bold;
+            font-size: 16px;
+            color: #333;
+        }}
+        .card-body {{
+            padding: 20px;
+        }}
+        .metrics-container {{
+            width: 100%;
+            text-align: center;
+            margin-bottom: 30px;
+        }}
+        .metric-box {{
+            display: inline-block;
+            width: 30%;
+            vertical-align: top;
+            padding: 15px 5px;
+        }}
+        .metric-icon {{
+            height: 32px;
+            width: 32px;
+            margin-bottom: 10px;
+        }}
+        .metric-value {{
+            font-size: 24px;
+            font-weight: bold;
+            color: #2c3e50;
+            line-height: 1.2;
+        }}
+        .metric-label {{
+            font-size: 13px;
+            color: #555;
+            margin-top: 5px;
+        }}
+        /* Markdown generated content styles */
+        .content h1, .content h2, .content h3 {{
+            color: #2c3e50;
+            margin-top: 0;
+        }}
+        .content ul {{
+            padding-left: 20px;
+        }}
+        .content code {{
+            background-color: #e8eaed;
+            padding: 3px 6px;
+            border-radius: 4px;
+            font-family: "Courier New", Courier, monospace;
+            font-size: 14px;
+        }}
+    </style>
+</head>
+<body>
+    <table class="container" role="presentation" border="0" cellpadding="0" cellspacing="0">
+        <!-- Header with Logo -->
+        <tr>
+            <td class="header">
+                <img src="cid:logo_novaon" alt="NOVAON Logo" style="max-width: 200px; height: auto;">
+                <p style="margin: 15px 0 0; font-size: 20px; color: #333;">Báo cáo An ninh Mạng pfSense</p>
+                <p style="margin: 5px 0 0; font-size: 14px; color: #777;">Hostname: <strong>{hostname}</strong></p>
+            </td>
+        </tr>
+
+        <!-- Main Content -->
+        <tr>
+            <td class="content">
+                <p>Xin chào,</p>
+
+                <p>Dưới đây là bản tóm tắt và phân tích tự động log pfSense văn phòng HCM, Q1, 215 Nguyễn Văn Thủ trong khoảng thời gian từ <strong>{start_time}</strong> đến <strong>{end_time}</strong>.</p>
+                
+                <!-- Metrics Summary -->
+                <table class="metrics-container" role="presentation" border="0" cellpadding="0" cellspacing="0">
+                    <tr>
+                        <td class="metric-box">
+                            <img class="metric-icon" src="https://img.icons8.com/ios/50/000000/shield.png" alt="Blocked">
+                            <div class="metric-value">{total_blocked}</div>
+                            <div class="metric-label">Sự kiện bị chặn</div>
+                        </td>
+                        <td class="metric-box">
+                            <img class="metric-icon" src="https://img.icons8.com/ios/50/000000/ip-address.png" alt="IP">
+                            <div class="metric-value">{top_ip}</div>
+                            <div class="metric-label">IP bị chặn nhiều nhất</div>
+                        </td>
+                        <td class="metric-box">
+                            <img class="metric-icon" src="https://img.icons8.com/ios/50/000000/error--v1.png" alt="Alert">
+                            <div class="metric-value">{critical_alerts}</div>
+                            <div class="metric-label">Cảnh báo</div>
+                        </td>
+                    </tr>
+                </table>
+                
+                <!-- Analysis Card -->
+                <div class="card">
+                    <div class="card-header">
+                        Phân Tích Chi Tiết
+                    </div>
+                    <div class="card-body">
+                        {analysis_result}
+                    </div>
+                </div>
+            </td>
+        </tr>
+
+        <!-- Footer -->
+        <tr>
+            <td class="footer">
+                <p>Đây là email được gửi tự động từ Hệ thống Giám sát NOVAON.</p>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
