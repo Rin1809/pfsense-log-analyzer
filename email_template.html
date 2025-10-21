@@ -111,7 +111,7 @@
         <tr>
             <td class="header">
                 <img src="cid:logo_novaon" alt="NOVAON Logo" style="max-width: 200px; height: auto;">
-                <p style="margin: 15px 0 0; font-size: 20px; color: #333;">Báo cáo An ninh Mạng pfSense</p>
+                <p style="margin: 15px 0 0; font-size: 20px; color: #333;">Báo Cáo Hệ Thống - pfSense</p>
                 <p style="margin: 5px 0 0; font-size: 14px; color: #777;">Hostname: <strong>{hostname}</strong></p>
             </td>
         </tr>
@@ -120,8 +120,7 @@
         <tr>
             <td class="content">
                 <p>Xin chào,</p>
-
-                <p>Dưới đây là bản tóm tắt và phân tích tự động log pfSense văn phòng HCM, Q1, 215 Nguyễn Văn Thủ trong khoảng thời gian từ <strong>{start_time}</strong> đến <strong>{end_time}</strong>.</p>
+                <p>Dưới đây là bản tóm tắt và phân tích tự động log pfSense trong khoảng thời gian từ <strong>{start_time}</strong> đến <strong>{end_time}</strong>.</p>
                 
                 <!-- Metrics Summary -->
                 <table class="metrics-container" role="presentation" border="0" cellpadding="0" cellspacing="0">
@@ -143,7 +142,15 @@
                         </td>
                     </tr>
                 </table>
-                
+                <!-- So do mang -->
+                <div class="card" id="network-diagram-card" style="display: none;">
+                    <div class="card-header">
+                        Sơ đồ hệ thống mạng
+                    </div>
+                    <div class="card-body" style="text-align: center;">
+                        <img src="cid:network_diagram" alt="Sơ đồ mạng" style="max-width: 100%; height: auto;">
+                    </div>
+                </div>
                 <!-- Analysis Card -->
                 <div class="card">
                     <div class="card-header">
@@ -159,7 +166,7 @@
         <!-- Footer -->
         <tr>
             <td class="footer">
-                <p>Đây là email được gửi tự động từ Hệ thống Giám sát NOVAON.</p>
+                <p>Đây là email được AI gửi tự động từ Hệ thống Giám sát NOVAON VP NVT.</p>
             </td>
         </tr>
     </table>

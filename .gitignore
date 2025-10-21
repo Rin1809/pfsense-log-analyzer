@@ -1,3 +1,14 @@
 moitruongao/
 config.ini
 .last_run_timestamp
+moitruongao/
+.venv/
+venv/
+env/
+
+__pycache__/
+*.pyc
+
+.idea/
+.vscode/
+Bonus_context/
