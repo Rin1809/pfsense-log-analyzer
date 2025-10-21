@@ -15,122 +15,139 @@ from google.api_core import exceptions as google_exceptions
 
 # --- Khai bao ---
 CONFIG_FILE = "config.ini"
+STATE_FILE = ".last_run_timestamp" 
+PROMPT_TEMPLATE_FILE = "prompt_template.md"
+EMAIL_TEMPLATE_FILE = "email_template.html"
 
-# Cấu hình logging
+# Cau hinh logging
 LOGGING_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
 logging.basicConfig(level=logging.INFO, format=LOGGING_FORMAT)
 
-# --- Các hàm chức năng ---
+# --- Ham chuc nang ---
 
-def read_recent_log_entries(file_path, hours, timezone_str):
+def get_last_run_timestamp():
+    # doc timestamp tu file state
+    if os.path.exists(STATE_FILE):
+        with open(STATE_FILE, 'r') as f:
+            try:
+                return datetime.fromisoformat(f.read().strip())
+            except ValueError:
+                return None
+    return None
+
+def save_last_run_timestamp(timestamp):
+    # luu timestamp vao file state
+    with open(STATE_FILE, 'w') as f:
+        f.write(timestamp.isoformat())
+
+def read_new_log_entries(file_path, hours, timezone_str):
     """
-    Đọc và lọc các dòng log trong khoảng thời gian gần đây nhất.
+    Doc cac dong log moi ke tu lan chay cuoi cung.
+    Neu la lan dau tien, se doc log trong khoang `hours` gio.
     """
-    logging.info(f"Đọc log từ '{file_path}' trong vòng {hours} giờ qua.")
+    logging.info(f"Bat dau doc log tu '{file_path}'.")
     
     try:
-        # lay thoi gian hien tai theo mui gio
         tz = pytz.timezone(timezone_str)
         now = datetime.now(tz)
-        time_cutoff = now - timedelta(hours=hours)
         
-        recent_entries = []
+        last_run_time = get_last_run_timestamp()
+        if last_run_time:
+            # chuyen doi last_run_time sang cung timezone
+            time_cutoff = last_run_time.astimezone(tz)
+            logging.info(f"Doc log ke tu lan chay cuoi: {time_cutoff.strftime('%Y-%m-%d %H:%M:%S')}")
+        else:
+            time_cutoff = now - timedelta(hours=hours)
+            logging.info(f"Lan chay dau tien. Doc log trong vong {hours} gio qua.")
+
+        new_entries = []
+        latest_log_time = time_cutoff
         current_year = now.year
 
         with open(file_path, 'r', encoding='utf-8') as f:
             for line in f:
                 try:
-                    # pfSense log timestamp format: "b M d H:M:S" (e.g., "Oct 17 08:50:00")
                     log_time_str = line[:15]
-                    # them nam hien tai vao
                     log_datetime_naive = datetime.strptime(f"{current_year} {log_time_str}", "%Y %b %d %H:%M:%S")
                     log_datetime_aware = tz.localize(log_datetime_naive)
                     
-                    # xu ly truong hop log cuoi nam, script chay dau nam
                     if log_datetime_aware > now:
                         log_datetime_aware = log_datetime_aware.replace(year=current_year - 1)
                     
-                    if log_datetime_aware >= time_cutoff:
-                        recent_entries.append(line)
+                    if log_datetime_aware > time_cutoff:
+                        new_entries.append(line)
+                        if log_datetime_aware > latest_log_time:
+                            latest_log_time = log_datetime_aware
                 except ValueError:
-                    # bo qua dong ko co timestamp
                     continue
         
-        logging.info(f"Tìm thấy {len(recent_entries)} dòng log phù hợp.")
-        return "".join(recent_entries)
+        # luu timestamp moi nhat cho lan chay tiep theo
+        # Chi luu neu co log moi de tranh file state bi ghi de boi timestamp cu
+        if new_entries:
+            save_last_run_timestamp(latest_log_time)
+        
+        logging.info(f"Tim thay {len(new_entries)} dong log moi.")
+        return "".join(new_entries)
 
     except FileNotFoundError:
-        logging.error(f"Lỗi: Không tìm thấy file log tại '{file_path}'.")
+        logging.error(f"Loi: Khong tim thay file log tai '{file_path}'.")
         return None
     except pytz.UnknownTimeZoneError:
-        logging.error(f"Lỗi: Múi giờ không hợp lệ '{timezone_str}'.")
+        logging.error(f"Loi: Mui gio khong hop le '{timezone_str}'.")
         return None
     except Exception as e:
-        logging.error(f"Đã xảy ra lỗi không mong muốn khi đọc file: {e}")
+        logging.error(f"Da xay ra loi khong mong muon khi doc file: {e}")
         return None
 
 def analyze_logs_with_gemini(logs_content, api_key):
     """
-    Gửi log đến Gemini AI để phân tích.
+    Gui log den Gemini AI de phan tich su dung template.
     """
-    if not logs_content or logs_content.strip() == "":
-        logging.warning("Nội dung log trống, bỏ qua phân tích.")
+    if not logs_content or not logs_content.strip():
+        logging.warning("Noi dung log trong, bo qua phan tich.")
         return "Không có sự kiện nào đáng chú ý trong khoảng thời gian được chọn."
 
+    try:
+        with open(PROMPT_TEMPLATE_FILE, 'r', encoding='utf-8') as f:
+            prompt_template = f.read()
+    except FileNotFoundError:
+        logging.error(f"Loi: Khong tim thay file template '{PROMPT_TEMPLATE_FILE}'.")
+        return f"Lỗi hệ thống: Không tìm thấy file '{PROMPT_TEMPLATE_FILE}'."
+
     genai.configure(api_key=api_key)
-
-    prompt = f"""
-    Bạn là một chuyên gia phân tích an ninh mạng. Hãy phân tích dữ liệu log của pfSense dưới đây và tạo một báo cáo chi tiết.
-    Báo cáo cần có các phần sau:
-    1.  **Tóm tắt tổng quan**: Những phát hiện quan trọng nhất.
-    2.  **Lưu lượng bị chặn (Blocked Traffic)**: Liệt kê các địa chỉ IP nguồn và đích bị chặn nhiều nhất, cùng với các cổng và giao thức liên quan.
-    3.  **Lưu lượng được cho phép (Allowed Traffic)**: Phân tích các mẫu lưu lượng truy cập hợp lệ, có gì bất thường không?
-    4.  **Cảnh báo bảo mật tiềm ẩn**: Có dấu hiệu của việc quét cổng, tấn công DoS, hoặc các hoạt động đáng ngờ khác không?
-    5.  **Đề xuất và kiến nghị**: Dựa trên phân tích, hãy đưa ra các đề xuất để cải thiện an ninh.
-
-    Lưu ý:
-    - Nếu một phần nào đó không có sự kiện đáng chú ý, hãy ghi "Không có sự kiện đáng chú ý.".
-    - Trình bày báo cáo bằng tiếng Việt.
-
-    --- DỮ LIỆU LOG ---
-    {logs_content}
-    --- KẾT THÚC DỮ LIỆU LOG ---
-    """
+    prompt = prompt_template.format(logs_content=logs_content)
 
     try:
-        logging.info("Gửi log đến Gemini để phân tích (timeout 120 giây)...")
-        model = genai.GenerativeModel('gemini-2.5-flash')
+        logging.info("Gui log den Gemini de phan tich (timeout 120 giay)...")
+        model = genai.GenerativeModel('gemini-2.5-flash') 
         request_options = {"timeout": 120}
         response = model.generate_content(prompt, request_options=request_options)
-        logging.info("Nhận phân tích từ Gemini thành công.")
+        logging.info("Nhan phan tich tu Gemini thanh cong.")
         return response.text
     except google_exceptions.DeadlineExceeded:
-        logging.error("Lỗi: Yêu cầu đến Gemini bị hết thời gian chờ (timeout).")
+        logging.error("Loi: Yeu cau den Gemini bi het thoi gian cho (timeout).")
         return "Không thể nhận phân tích từ Gemini do hết thời gian chờ."
     except Exception as e:
-        logging.error(f"Lỗi khi giao tiếp với Gemini: {e}")
+        logging.error(f"Loi khi giao tiep voi Gemini: {e}")
         return f"Đã xảy ra lỗi khi phân tích log với Gemini: {e}"
 
-def send_email(subject, body, config):
+def send_email(subject, body_html, config):
     """
-    Gửi email báo cáo.
+    Gui email bao cao.
     """
     sender_email = config.get('Email', 'SenderEmail')
     sender_password = config.get('Email', 'SenderPassword')
-    # ho tro nhieu nguoi nhan, cach nhau boi dau phay
     recipient_emails_str = config.get('Email', 'RecipientEmails')
     recipient_emails_list = [email.strip() for email in recipient_emails_str.split(',')]
     
-    logging.info(f"Đang chuẩn bị gửi email đến {recipient_emails_str}...")
+    logging.info(f"Dang chuan bi gui email den {recipient_emails_str}...")
     
     msg = MIMEMultipart()
     msg['From'] = sender_email
     msg['To'] = recipient_emails_str
     msg['Subject'] = subject
 
-    # chuyen doi markdown sang html
-    html_body = markdown.markdown(body)
-    msg.attach(MIMEText(html_body, 'html'))
+    msg.attach(MIMEText(body_html, 'html'))
 
     try:
         server = smtplib.SMTP(config.get('Email', 'SMTPServer'), config.getint('Email', 'SMTPPort'))
@@ -138,26 +155,24 @@ def send_email(subject, body, config):
         server.login(sender_email, sender_password)
         server.sendmail(sender_email, recipient_emails_list, msg.as_string())
         server.quit()
-        logging.info("Email đã được gửi thành công!")
+        logging.info("Email da duoc gui thanh cong!")
     except smtplib.SMTPAuthenticationError:
-        logging.error("Lỗi xác thực SMTP. Vui lòng kiểm tra lại email và mật khẩu.")
+        logging.error("Loi xac thuc SMTP. Vui long kiem tra lai email va mat khau.")
     except Exception as e:
-        logging.error(f"Lỗi khi gửi email: {e}")
+        logging.error(f"Loi khi gui email: {e}")
 
 def run_analysis_cycle():
     """
-    Hàm thực hiện một chu kỳ phân tích hoàn chỉnh.
+    Ham thuc hien mot chu ky phan tich hoan chinh.
     """
-    logging.info("Bắt đầu chu kỳ phân tích log pfSense.")
+    logging.info("Bat dau chu ky phan tich log pfSense.")
 
-    # 1. Load config
     config = configparser.ConfigParser()
     if not os.path.exists(CONFIG_FILE):
-        logging.error(f"Lỗi: File cấu hình '{CONFIG_FILE}' không tồn tại.")
+        logging.error(f"Loi: File cau hinh '{CONFIG_FILE}' khong ton tai.")
         return
     config.read(CONFIG_FILE)
 
-    # 2. Đọc các thông số cấu hình
     try:
         log_file = config.get('Syslog', 'LogFile')
         hours = config.getint('Syslog', 'HoursToAnalyze')
@@ -165,60 +180,58 @@ def run_analysis_cycle():
         gemini_api_key = config.get('Gemini', 'APIKey')
         hostname = config.get('System', 'PFSenseHostname')
     except (configparser.NoSectionError, configparser.NoOptionError) as e:
-        logging.error(f"Lỗi đọc file cấu hình: {e}. Vui lòng kiểm tra lại file '{CONFIG_FILE}'.")
+        logging.error(f"Loi doc file cau hinh: {e}. Vui long kiem tra lai file '{CONFIG_FILE}'.")
         return
 
     if not gemini_api_key or gemini_api_key == "YOUR_API_KEY_HERE":
-        logging.error("Lỗi: 'APIKey' trong file config.ini chưa được thiết lập.")
+        logging.error("Loi: 'APIKey' trong file config.ini chua duoc thiet lap.")
         return
 
-    # 3. Đọc log
-    logs_content = read_recent_log_entries(log_file, hours, timezone)
+    logs_content = read_new_log_entries(log_file, hours, timezone)
     if logs_content is None:
-        logging.error("Không thể tiếp tục do không đọc được file log.")
+        logging.error("Khong the tiep tuc do khong doc duoc file log.")
         return
 
-    # 4. Phân tích log
     analysis_result = analyze_logs_with_gemini(logs_content, gemini_api_key)
 
-    # 5. Tao noi dung email
     email_subject = f"Báo cáo Log pfSense [{hostname}] - {datetime.now(pytz.timezone(timezone)).strftime('%Y-%m-%d %H:%M')}"
-    email_body = f"""
-# Báo cáo phân tích Log pfSense - {hostname}
+    
+    try:
+        with open(EMAIL_TEMPLATE_FILE, 'r', encoding='utf-8') as f:
+            email_template = f.read()
+        
+        analysis_html = markdown.markdown(analysis_result)
+        
+        email_body_html = email_template.format(
+            hostname=hostname,
+            hours=hours,
+            analysis_result=analysis_html
+        )
+        send_email(email_subject, email_body_html, config)
+    except FileNotFoundError:
+        logging.error(f"Loi: Khong tim thay file email template '{EMAIL_TEMPLATE_FILE}'. Email se khong duoc gui.")
+    except Exception as e:
+        logging.error(f"Loi khi tao noi dung email: {e}")
 
-Xin chào,
-
-Dưới đây là báo cáo phân tích tự động các log trong **{hours}** giờ vừa qua.
-
----
-
-{analysis_result}
-
----
-
-*Đây là email được gửi tự động từ hệ thống giám sát.*
-"""
-    send_email(email_subject, email_body, config)
-    logging.info("Hoàn tất chu kỳ phân tích.")
+    logging.info("Hoan tat chu ky phan tich.")
 
 
 def main():
     """
-    Hàm chính điều khiển vòng lặp chạy liên tục của script.
+    Ham chinh dieu khien vong lap chay lien tuc cua script.
     """
     while True:
         run_analysis_cycle()
         
-        
-        interval_seconds = 3600  
+        interval_seconds = 86400  # mac dinh 24h
         try:
             config = configparser.ConfigParser()
             config.read(CONFIG_FILE)
             interval_seconds = config.getint('System', 'RunIntervalSeconds')
         except Exception as e:
-            logging.error(f"Không thể đọc 'RunIntervalSeconds' từ config.ini: {e}. Sử dụng giá trị mặc định là 86400 giây.")
+            logging.error(f"Khong the doc 'RunIntervalSeconds' tu config.ini: {e}. Su dung gia tri mac dinh la {interval_seconds} giay.")
             
-        logging.info(f"Chu kỳ tiếp theo sẽ bắt đầu sau {interval_seconds} giây. Tạm nghỉ...")
+        logging.info(f"Chu ky tiep theo se bat dau sau {interval_seconds} giay. Tam nghi...")
         time.sleep(interval_seconds)
 
 if __name__ == "__main__":
