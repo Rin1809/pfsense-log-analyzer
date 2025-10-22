@@ -183,7 +183,6 @@ def send_email(subject, body_html, config):
     except Exception as e:
         logging.error(f"Loi khi gui email: {e}")
 
-
 def read_bonus_context_files(config):
     context_parts = []
     if not config.has_section('Bonus_Context'):
@@ -203,6 +202,27 @@ def read_bonus_context_files(config):
             logging.warning(f"File boi canh '{file_path}' khong ton tai. Bo qua.")
     return "\n\n".join(context_parts) if context_parts else "Không có thông tin bối cảnh bổ sung nào được cung cấp."
 
+def save_structured_report(report_data, timezone_str, base_report_dir):
+    # luu du lieu tho ra file json
+    try:
+        tz = pytz.timezone(timezone_str)
+        now = datetime.now(tz)
+        
+        date_folder = now.strftime('%Y-%m-%d')
+        time_filename = now.strftime('%H-%M-%S') + '.json'
+        
+        report_folder_path = os.path.join(base_report_dir, date_folder)
+        report_file_path = os.path.join(report_folder_path, time_filename)
+        
+        os.makedirs(report_folder_path, exist_ok=True)
+        
+        with open(report_file_path, 'w', encoding='utf-8') as f:
+            json.dump(report_data, f, ensure_ascii=False, indent=4)
+        logging.info(f"Da luu bao cao JSON vao file: '{report_file_path}'")
+            
+    except Exception as e:
+        logging.error(f"Loi khi luu file bao cao JSON: {e}")
+
 def run_analysis_cycle():
     logging.info("Bat dau chu ky phan tich log pfSense.")
     config = configparser.ConfigParser()
@@ -210,15 +230,18 @@ def run_analysis_cycle():
         logging.error(f"Loi: File cau hinh '{CONFIG_FILE}' khong ton tai.")
         return
     config.read(CONFIG_FILE)
+    
     try:
         log_file = config.get('Syslog', 'LogFile')
         hours = config.getint('Syslog', 'HoursToAnalyze')
         timezone = config.get('System', 'TimeZone')
         gemini_api_key = config.get('Gemini', 'APIKey')
         hostname = config.get('System', 'PFSenseHostname')
+        report_dir = config.get('System', 'ReportDirectory', fallback='reports')
     except (configparser.NoSectionError, configparser.NoOptionError) as e:
         logging.error(f"Loi doc file cau hinh: {e}. Vui long kiem tra lai file '{CONFIG_FILE}'.")
         return
+        
     if not gemini_api_key or gemini_api_key == "YOUR_API_KEY_HERE":
         logging.error("Loi: 'APIKey' trong file config.ini chua duoc thiet lap.")
         return
@@ -243,6 +266,16 @@ def run_analysis_cycle():
     except Exception as e:
         logging.warning(f"Khong the phan tich JSON tom tat tu AI: {e}")
 
+    # Tap hop du lieu tho de luu ra file JSON
+    report_data_for_json = {
+        "hostname": hostname,
+        "analysis_start_time": start_time_obj.isoformat(),
+        "analysis_end_time": end_time_obj.isoformat(),
+        "report_generated_time": datetime.now(pytz.timezone(timezone)).isoformat(),
+        "summary_stats": summary_data,
+        "analysis_details_markdown": analysis_markdown
+    }
+
     email_subject = f"Báo cáo Log pfSense [{hostname}] - {datetime.now(pytz.timezone(timezone)).strftime('%Y-%m-%d %H:%M')}"
     
     try:
@@ -263,6 +296,10 @@ def run_analysis_cycle():
             start_time=start_time_str,
             end_time=end_time_str
         )
+        
+        # Chi luu bao cao duoi dang JSON
+        save_structured_report(report_data_for_json, timezone, report_dir)
+        
         send_email(email_subject, email_body_html, config)
     except FileNotFoundError:
         logging.error(f"Loi: Khong tim thay file email template '{EMAIL_TEMPLATE_FILE}'. Email se khong duoc gui.")

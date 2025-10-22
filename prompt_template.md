@@ -18,7 +18,7 @@ Ví dụ JSON:
 
 Sau đó, tạo một báo cáo chi tiết bằng tiếng Việt với các phần sau:
 1.  **Tóm tắt tổng quan**: Những phát hiện quan trọng nhất.
-2.  **Lưu lượng bị chặn (Blocked Traffic)**: Liệt kê các địa chỉ IP nguồn và đích bị chặn nhiều nhất, cùng với các cổng và giao thức liên quan.
+2.  **Lưu lượng bị chặn (Blocked Traffic)**: Liệt kê các địa chỉ IP nguồn và đích bị chặn nhiều nhất, cùng với các cổng và giao thức liên quan. Không cần quan tâm đến Ipv6 vì công ty tôi không sử dụng.
 3.  **Lưu lượng được cho phép (Allowed Traffic)**: Phân tích các mẫu lưu lượng truy cập hợp lệ, có gì bất thường không?
 4.  **Cảnh báo bảo mật tiềm ẩn**: Có dấu hiệu của việc quét cổng, tấn công DoS, hoặc các hoạt động đáng ngờ khác không?
 5.  **Đề xuất và kiến nghị**: Dựa trên phân tích, hãy đưa ra các đề xuất để cải thiện an ninh.

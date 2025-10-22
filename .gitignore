@@ -8,7 +8,7 @@ env/
 
 __pycache__/
 *.pyc
-
+レポート/
 .idea/
 .vscode/
 Bonus_context/
