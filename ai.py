@@ -464,12 +464,14 @@ def main():
             return
         config.read(CONFIG_FILE)
 
+        # --- Buoc 1: Chay chu ky phan tich dinh ky ---
         try:
             run_analysis_cycle(config)
         except Exception as e:
             logging.error(f"Gap loi nghiem trong khi chay phan tich dinh ky: {e}")
 
 
+        # --- Buoc 2: Kiem tra va chay chu ky tong hop ---
         try:
             summary_enabled = config.getboolean('SummaryReport', 'enabled', fallback=False)
             if summary_enabled:
@@ -486,6 +488,7 @@ def main():
                 else:
                     save_summary_count(current_count) # Luu bo dem moi
             else:
+                 # neu tinh nang tat, dam bao file dem khong ton tai hoac reset
                 if os.path.exists(SUMMARY_COUNT_FILE):
                     save_summary_count(0)
         except (configparser.NoSectionError, configparser.NoOptionError, ValueError) as e:
@@ -494,8 +497,8 @@ def main():
             logging.error(f"Gap loi nghiem trong khi xu ly chu ky tong hop: {e}")
 
         
-   
-        interval_seconds = 3600 
+        # --- Buoc 3: Nghi ---
+        interval_seconds = 3600 # gia tri mac dinh
         try:
             interval_seconds = config.getint('System', 'RunIntervalSeconds')
         except Exception as e:
