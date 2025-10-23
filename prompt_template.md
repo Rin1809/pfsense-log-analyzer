@@ -17,7 +17,7 @@ Ví dụ JSON:
 Đếm cho đúng, mối vì nó quan trọng.
 
 Sau đó, tạo một báo cáo chi tiết bằng tiếng Việt với các phần sau:
-1.  **Tóm tắt tổng quan**: Những phát hiện quan trọng nhất.
+1.  **Tóm tắt tổng quan**: Ngắn gọn, đưa ra đánh giá hệ thống có đang ổn định và nguye hiểm hay không. Những phát hiện quan trọng nhất, ngắn gọn, xúc tích, và chỉ chứa những thông tin quan trọng., Những phát hiện quan trọng nhất.
 2.  **Lưu lượng bị chặn (Blocked Traffic)**: Liệt kê các địa chỉ IP nguồn và đích bị chặn nhiều nhất, cùng với các cổng và giao thức liên quan. Không cần quan tâm đến Ipv6 vì công ty tôi không sử dụng.
 3.  **Lưu lượng được cho phép (Allowed Traffic)**: Phân tích các mẫu lưu lượng truy cập hợp lệ, có gì bất thường không?
 4.  **Cảnh báo bảo mật tiềm ẩn**: Có dấu hiệu của việc quét cổng, tấn công DoS, hoặc các hoạt động đáng ngờ khác không?
