@@ -128,13 +128,6 @@ def analyze_logs_with_gemini(content, bonus_context, api_key, prompt_file):
         return f"Lỗi hệ thống: Không tìm thấy file '{prompt_file}'."
 
     genai.configure(api_key=api_key)
-    
-    # Google Search Tool syntax ---
-    model = genai.GenerativeModel(
-        'gemini-2.5-flash',
-        tools=[{'google_search_retrieval': {}}]
-    )
-
     # ten bien prompt se khac nhau giua 2 prompt file
     if prompt_file == SUMMARY_PROMPT_TEMPLATE_FILE:
         prompt = prompt_template.format(reports_content=content, bonus_context=bonus_context)
@@ -142,7 +135,8 @@ def analyze_logs_with_gemini(content, bonus_context, api_key, prompt_file):
         prompt = prompt_template.format(logs_content=content, bonus_context=bonus_context)
 
     try:
-        logging.info(f"Gui yeu cau den Gemini (prompt: {prompt_file}, timeout 180 giay, voi Google Search)...")
+        logging.info(f"Gui yeu cau den Gemini (prompt: {prompt_file}, timeout 180 giay)...")
+        model = genai.GenerativeModel('gemini-2.5-flash')
         request_options = {"timeout": 180}
         response = model.generate_content(prompt, request_options=request_options)
         logging.info("Nhan phan tich tu Gemini thanh cong.")
@@ -384,7 +378,7 @@ def run_summary_analysis_cycle(config):
                 if start_time_overall is None or start_time_report < start_time_overall:
                     start_time_overall = start_time_report
                 if end_time_overall is None or end_time_report > end_time_overall:
-                    end_time_overall = end_time_overall
+                    end_time_overall = end_time_report
 
         except Exception as e:
             logging.error(f"Loi khi doc file bao cao '{report_path}': {e}")
@@ -473,7 +467,7 @@ def main():
         try:
             run_analysis_cycle(config)
         except Exception as e:
-            logging.error(f"Gap loi nghiem trong khi chay phan tich dinh ky: {e}", exc_info=True)
+            logging.error(f"Gap loi nghiem trong khi chay phan tich dinh ky: {e}")
 
 
         try:
@@ -497,7 +491,7 @@ def main():
         except (configparser.NoSectionError, configparser.NoOptionError, ValueError) as e:
             logging.warning(f"Khong the doc cau hinh SummaryReport hoac bi loi: {e}. Bo qua chu ky tong hop.")
         except Exception as e:
-            logging.error(f"Gap loi nghiem trong khi xu ly chu ky tong hop: {e}", exc_info=True)
+            logging.error(f"Gap loi nghiem trong khi xu ly chu ky tong hop: {e}")
 
         
    
