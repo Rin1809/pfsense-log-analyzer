@@ -27,6 +27,7 @@ SUMMARY_COUNT_FILE = ".summary_report_count"
 PROMPT_TEMPLATE_FILE = "prompt_template.md"
 SUMMARY_PROMPT_TEMPLATE_FILE = "summary_prompt_template.md"
 EMAIL_TEMPLATE_FILE = "email_template.html"
+SUMMARY_EMAIL_TEMPLATE_FILE = "summary_email_template.html" # them moi
 LOGO_FILE = "logo_novaon.png"
 
 # Cau hinh logging
@@ -136,7 +137,7 @@ def analyze_logs_with_gemini(content, bonus_context, api_key, prompt_file):
 
     try:
         logging.info(f"Gui yeu cau den Gemini (prompt: {prompt_file}, timeout 180 giay)...")
-        model = genai.GenerativeModel('gemini-2.5-flash')
+        model = genai.GenerativeModel('gemini-2.5-flash') 
         request_options = {"timeout": 180}
         response = model.generate_content(prompt, request_options=request_options)
         logging.info("Nhan phan tich tu Gemini thanh cong.")
@@ -148,7 +149,7 @@ def analyze_logs_with_gemini(content, bonus_context, api_key, prompt_file):
         logging.error(f"Loi khi giao tiep voi Gemini: {e}")
         return f"Đã xảy ra lỗi khi phân tích log với Gemini: {e}"
 
-def send_email(subject, body_html, config, recipient_emails_str):
+def send_email(subject, body_html, config, recipient_emails_str, attachment_files=None): # them attachment_files
     # Gui email bao cao, co ho tro dinh kem file
     sender_email = config.get('Email', 'SenderEmail')
     sender_password = config.get('Email', 'SenderPassword')
@@ -192,7 +193,8 @@ def send_email(subject, body_html, config, recipient_emails_str):
             logging.warning(f"Khong tim thay file so do mang tai '{network_diagram_path}'.")
 
     msg.attach(msg_related)
-
+    
+    # Dinh kem cac file context neu duoc cau hinh
     if config.getboolean('Attachments', 'AttachContextFiles', fallback=False):
         if config.has_section('Bonus_Context'):
             for key, file_path in config.items('Bonus_Context'):
@@ -207,6 +209,21 @@ def send_email(subject, body_html, config, recipient_emails_str):
                         logging.error(f"Loi khi dinh kem file '{file_path}': {e}")
                 else:
                     logging.warning(f"File context de dinh kem '{file_path}' khong ton tai.")
+
+    # Dinh kem cac file bao cao da tong hop (neu co)
+    if attachment_files:
+        for file_path in attachment_files:
+            if os.path.exists(file_path):
+                try:
+                    with open(file_path, 'rb') as attachment:
+                        part = MIMEApplication(attachment.read(), Name=os.path.basename(file_path))
+                    part['Content-Disposition'] = f'attachment; filename="{os.path.basename(file_path)}"'
+                    msg.attach(part)
+                    logging.info(f"Da dinh kem file bao cao da tong hop: '{file_path}'")
+                except Exception as e:
+                    logging.error(f"Loi khi dinh kem file bao cao '{file_path}': {e}")
+            else:
+                logging.warning(f"File bao cao de dinh kem '{file_path}' khong ton tai.")
 
     # Gui email
     try:
@@ -354,6 +371,10 @@ def run_summary_analysis_cycle(config):
     # Tim N file report moi nhat
     report_files_pattern = os.path.join(report_dir, "*", "*.json")
     all_reports = sorted(glob.glob(report_files_pattern), key=os.path.getmtime, reverse=True)
+    
+    # loai tru cac bao cao tong hop da co
+    all_reports = [r for r in all_reports if "summary" not in r]
+    
     reports_to_summarize = all_reports[:reports_per_summary]
 
     if not reports_to_summarize:
@@ -420,7 +441,7 @@ def run_summary_analysis_cycle(config):
     email_subject = f"Báo cáo TỔNG HỢP Log pfSense [{hostname}] - {datetime.now(pytz.timezone(timezone)).strftime('%Y-%m-%d')}"
 
     try:
-        with open(EMAIL_TEMPLATE_FILE, 'r', encoding='utf-8') as f:
+        with open(SUMMARY_EMAIL_TEMPLATE_FILE, 'r', encoding='utf-8') as f:
             email_template = f.read()
         
         analysis_html = markdown.markdown(analysis_markdown)
@@ -432,23 +453,15 @@ def run_summary_analysis_cycle(config):
             hostname=hostname,
             analysis_result=analysis_html,
             total_blocked=summary_data.get("total_blocked_events_period", "N/A"),
-            top_ip=summary_data.get("most_frequent_issue", "N/A"),
+            top_issue=summary_data.get("most_frequent_issue", "N/A"), # sua ten bien
             critical_alerts=summary_data.get("total_alerts_period", "N/A"),
             start_time=start_time_str,
             end_time=end_time_str
         )
-        # Thay doi tieu de de phan biet
-        email_body_html = email_body_html.replace(
-            '<p style="margin: 15px 0 0; font-size: 20px; color: #333;">Báo Cáo Hệ Thống - pfSense</p>',
-            '<p style="margin: 15px 0 0; font-size: 20px; color: #333;">BÁO CÁO TỔNG HỢP - pfSense</p>'
-        ).replace(
-            '<div class="metric-label">IP bị chặn nhiều nhất</div>',
-            '<div class="metric-label">Vấn đề nổi bật</div>'
-        )
 
-        send_email(email_subject, email_body_html, config, recipient_emails)
+        send_email(email_subject, email_body_html, config, recipient_emails, attachment_files=reports_to_summarize) # dinh kem file
     except FileNotFoundError:
-        logging.error(f"Loi: Khong tim thay file email template '{EMAIL_TEMPLATE_FILE}'. Email se khong duoc gui.")
+        logging.error(f"Loi: Khong tim thay file email template '{SUMMARY_EMAIL_TEMPLATE_FILE}'. Email se khong duoc gui.")
     except Exception as e:
         logging.error(f"Loi khi tao noi dung email tong hop: {e}")
 
@@ -464,14 +477,12 @@ def main():
             return
         config.read(CONFIG_FILE)
 
-        # --- Buoc 1: Chay chu ky phan tich dinh ky ---
         try:
             run_analysis_cycle(config)
         except Exception as e:
             logging.error(f"Gap loi nghiem trong khi chay phan tich dinh ky: {e}")
 
 
-        # --- Buoc 2: Kiem tra va chay chu ky tong hop ---
         try:
             summary_enabled = config.getboolean('SummaryReport', 'enabled', fallback=False)
             if summary_enabled:
@@ -497,7 +508,6 @@ def main():
             logging.error(f"Gap loi nghiem trong khi xu ly chu ky tong hop: {e}")
 
         
-        # --- Buoc 3: Nghi ---
         interval_seconds = 3600 # gia tri mac dinh
         try:
             interval_seconds = config.getint('System', 'RunIntervalSeconds')
