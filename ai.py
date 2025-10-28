@@ -14,80 +14,82 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.image import MIMEImage
 from email.mime.application import MIMEApplication
-from email.mime.base import MIMEBase
-from email import encoders
 import google.generativeai as genai
 from google.api_core import exceptions as google_exceptions
 import glob
 
-# --- Khai bao ---
+# --- Khai báo hằng số (Dùng làm giá trị mặc định/fallback) ---
 CONFIG_FILE = "config.ini"
-STATE_FILE = ".last_run_timestamp"
-SUMMARY_COUNT_FILE = ".summary_report_count"
 PROMPT_TEMPLATE_FILE = "prompt_template.md"
 SUMMARY_PROMPT_TEMPLATE_FILE = "summary_prompt_template.md"
 EMAIL_TEMPLATE_FILE = "email_template.html"
-SUMMARY_EMAIL_TEMPLATE_FILE = "summary_email_template.html" # them moi
+SUMMARY_EMAIL_TEMPLATE_FILE = "summary_email_template.html"
 LOGO_FILE = "logo_novaon.png"
 
-# Cau hinh logging
+
 LOGGING_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
 logging.basicConfig(level=logging.INFO, format=LOGGING_FORMAT)
 
-
-def get_last_run_timestamp():
-    # doc timestamp tu file state
-    if os.path.exists(STATE_FILE):
-        with open(STATE_FILE, 'r') as f:
+# --- Các hàm quản lý trạng thá
+def get_last_run_timestamp(firewall_id):
+    """Đọc timestamp từ file state dành riêng cho một firewall."""
+    state_file = f".last_run_timestamp_{firewall_id}"
+    if os.path.exists(state_file):
+        with open(state_file, 'r') as f:
             try:
                 return datetime.fromisoformat(f.read().strip())
             except ValueError:
                 return None
     return None
 
-def save_last_run_timestamp(timestamp):
-    # luu timestamp vao file state
-    with open(STATE_FILE, 'w') as f:
+def save_last_run_timestamp(timestamp, firewall_id):
+    """Lưu timestamp vào file state dành riêng cho một firewall."""
+    state_file = f".last_run_timestamp_{firewall_id}"
+    with open(state_file, 'w') as f:
         f.write(timestamp.isoformat())
 
-def get_summary_count():
-    # lay so dem bao cao da chay
-    if not os.path.exists(SUMMARY_COUNT_FILE):
+def get_summary_count(firewall_id):
+    """Lấy số đếm báo cáo đã chạy cho một firewall."""
+    summary_count_file = f".summary_report_count_{firewall_id}"
+    if not os.path.exists(summary_count_file):
         return 0
     try:
-        with open(SUMMARY_COUNT_FILE, 'r') as f:
+        with open(summary_count_file, 'r') as f:
             return int(f.read().strip())
     except (ValueError, FileNotFoundError):
         return 0
 
-def save_summary_count(count):
-    # luu so dem
+def save_summary_count(count, firewall_id):
+    """Lưu số đếm cho một firewall."""
+    summary_count_file = f".summary_report_count_{firewall_id}"
     try:
-        with open(SUMMARY_COUNT_FILE, 'w') as f:
+        with open(summary_count_file, 'w') as f:
             f.write(str(count))
-        logging.info(f"Da cap nhat file dem tong hop: .summary_report_count = {count}")
+        logging.info(f"[{firewall_id}] Đã cập nhật file đếm: {summary_count_file} = {count}")
     except Exception as e:
-        logging.error(f"Loi khi luu file dem tong hop: {e}")
+        logging.error(f"[{firewall_id}] Lỗi khi lưu file đếm: {e}")
 
+# --- Các hàm lõi 
 
-def read_new_log_entries(file_path, hours, timezone_str):
-    logging.info(f"Bat dau doc log tu '{file_path}'.")
+def read_new_log_entries(file_path, hours, timezone_str, firewall_id):
+    """Đọc các dòng log mới từ một file log cụ thể."""
+    logging.info(f"[{firewall_id}] Bắt đầu đọc log từ '{file_path}'.")
     try:
         tz = pytz.timezone(timezone_str)
         end_time = datetime.now(tz)
-        last_run_time = get_last_run_timestamp()
+        last_run_time = get_last_run_timestamp(firewall_id)
 
         if last_run_time:
             start_time = last_run_time.astimezone(tz)
-            logging.info(f"Doc log ke tu lan chay cuoi: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+            logging.info(f"[{firewall_id}] Đọc log kể từ lần chạy cuối: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
         else:
             start_time = end_time - timedelta(hours=hours)
-            logging.info(f"Lan chay dau tien. Doc log trong vong {hours} gio qua.")
-        
+            logging.info(f"[{firewall_id}] Lần chạy đầu tiên. Đọc log trong vòng {hours} giờ qua.")
+
         new_entries = []
         latest_log_time = start_time
         current_year = end_time.year
-        with open(file_path, 'r', encoding='utf-8') as f:
+        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
             for line in f:
                 try:
                     log_time_str = line[:15]
@@ -100,62 +102,64 @@ def read_new_log_entries(file_path, hours, timezone_str):
                         if log_datetime_aware > latest_log_time:
                             latest_log_time = log_datetime_aware
                 except ValueError:
-                    # bo qua dong log ko dung dinh dang
                     continue
-        
+
         if new_entries:
-            save_last_run_timestamp(latest_log_time)
-            
-        logging.info(f"Tim thay {len(new_entries)} dong log moi.")
+            save_last_run_timestamp(latest_log_time, firewall_id)
+
+        logging.info(f"[{firewall_id}] Tìm thấy {len(new_entries)} dòng log mới.")
         return ("".join(new_entries), start_time, end_time)
 
     except FileNotFoundError:
-        logging.error(f"Loi: Khong tim thay file log tai '{file_path}'.")
+        logging.error(f"[{firewall_id}] Lỗi: Không tìm thấy file log tại '{file_path}'.")
         return (None, None, None)
     except Exception as e:
-        logging.error(f"Da xay ra loi khong mong muon khi doc file: {e}")
+        logging.error(f"[{firewall_id}] Lỗi không mong muốn khi đọc file: {e}")
         return (None, None, None)
 
-def analyze_logs_with_gemini(content, bonus_context, api_key, prompt_file):
+def analyze_logs_with_gemini(firewall_id, content, bonus_context, api_key, prompt_file):
+    """Gửi yêu cầu phân tích tới Gemini."""
     if not content or not content.strip():
-        logging.warning("Noi dung trong, bo qua phan tich.")
+        logging.warning(f"[{firewall_id}] Nội dung trống, bỏ qua phân tích.")
         return "Không có dữ liệu nào để phân tích trong khoảng thời gian được chọn."
 
     try:
         with open(prompt_file, 'r', encoding='utf-8') as f:
             prompt_template = f.read()
     except FileNotFoundError:
-        logging.error(f"Loi: Khong tim thay file template '{prompt_file}'.")
+        logging.error(f"[{firewall_id}] Lỗi: Không tìm thấy file template '{prompt_file}'.")
         return f"Lỗi hệ thống: Không tìm thấy file '{prompt_file}'."
 
     genai.configure(api_key=api_key)
-    # ten bien prompt se khac nhau giua 2 prompt file
-    if prompt_file == SUMMARY_PROMPT_TEMPLATE_FILE:
+    
+    # Logic để xác định cách format prompt dựa trên tên file
+    is_summary_prompt = 'summary' in os.path.basename(prompt_file).lower()
+    if is_summary_prompt:
         prompt = prompt_template.format(reports_content=content, bonus_context=bonus_context)
     else:
         prompt = prompt_template.format(logs_content=content, bonus_context=bonus_context)
 
     try:
-        logging.info(f"Gui yeu cau den Gemini (prompt: {prompt_file}, timeout 180 giay)...")
-        model = genai.GenerativeModel('gemini-2.5-flash') 
+        logging.info(f"[{firewall_id}] Gửi yêu cầu đến Gemini (prompt: {prompt_file}, timeout 180 giây)...")
+        model = genai.GenerativeModel('gemini-2.5-flash')
         request_options = {"timeout": 180}
         response = model.generate_content(prompt, request_options=request_options)
-        logging.info("Nhan phan tich tu Gemini thanh cong.")
+        logging.info(f"[{firewall_id}] Nhận phân tích từ Gemini thành công.")
         return response.text
     except google_exceptions.DeadlineExceeded:
-        logging.error("Loi: Yeu cau den Gemini bi het thoi gian cho (timeout).")
+        logging.error(f"[{firewall_id}] Lỗi: Yêu cầu đến Gemini bị hết thời gian chờ (timeout).")
         return "Không thể nhận phân tích từ Gemini do hết thời gian chờ."
     except Exception as e:
-        logging.error(f"Loi khi giao tiep voi Gemini: {e}")
+        logging.error(f"[{firewall_id}] Lỗi khi giao tiếp với Gemini: {e}")
         return f"Đã xảy ra lỗi khi phân tích log với Gemini: {e}"
 
-def send_email(subject, body_html, config, recipient_emails_str, attachment_files=None): # them attachment_files
-    # Gui email bao cao, co ho tro dinh kem file
+def send_email(firewall_id, subject, body_html, config, recipient_emails_str, attachment_paths=None):
+    """Gửi email báo cáo, hỗ trợ đính kèm file."""
     sender_email = config.get('Email', 'SenderEmail')
     sender_password = config.get('Email', 'SenderPassword')
     recipient_emails_list = [email.strip() for email in recipient_emails_str.split(',')]
     
-    logging.info(f"Dang chuan bi gui email den {recipient_emails_str}...")
+    logging.info(f"[{firewall_id}] Chuẩn bị gửi email đến {recipient_emails_str}...")
     
     msg = MIMEMultipart('mixed')
     msg['From'] = sender_email
@@ -170,14 +174,14 @@ def send_email(subject, body_html, config, recipient_emails_str, attachment_file
     
     msg_related.attach(MIMEText(body_html, 'html'))
     
+    # Nhúng logo và sơ đồ mạng
     try:
         with open(LOGO_FILE, 'rb') as f:
             img_logo = MIMEImage(f.read())
             img_logo.add_header('Content-ID', '<logo_novaon>')
             msg_related.attach(img_logo)
-            logging.info(f"Da nhung logo '{LOGO_FILE}' vao email.")
     except FileNotFoundError:
-        logging.warning(f"Khong tim thay file logo tai '{LOGO_FILE}'.")
+        logging.warning(f"[{firewall_id}] Không tìm thấy file logo '{LOGO_FILE}'.")
     
     if network_diagram_path and os.path.exists(network_diagram_path):
         try:
@@ -185,80 +189,67 @@ def send_email(subject, body_html, config, recipient_emails_str, attachment_file
                 img_diagram = MIMEImage(f.read())
                 img_diagram.add_header('Content-ID', '<network_diagram>')
                 msg_related.attach(img_diagram)
-                logging.info(f"Da nhung so do mang '{network_diagram_path}' vao email.")
         except Exception as e:
-            logging.error(f"Loi khi nhung so do mang: {e}")
-    else:
-        if network_diagram_path:
-            logging.warning(f"Khong tim thay file so do mang tai '{network_diagram_path}'.")
+            logging.error(f"[{firewall_id}] Lỗi khi nhúng sơ đồ mạng: {e}")
 
     msg.attach(msg_related)
     
-    # Dinh kem cac file context neu duoc cau hinh
-    if config.getboolean('Attachments', 'AttachContextFiles', fallback=False):
-        if config.has_section('Bonus_Context'):
-            for key, file_path in config.items('Bonus_Context'):
-                if os.path.exists(file_path):
-                    try:
-                        with open(file_path, 'rb') as attachment:
-                            part = MIMEApplication(attachment.read(), Name=os.path.basename(file_path))
-                        part['Content-Disposition'] = f'attachment; filename="{os.path.basename(file_path)}"'
-                        msg.attach(part)
-                        logging.info(f"Da dinh kem file context '{file_path}' vao email.")
-                    except Exception as e:
-                        logging.error(f"Loi khi dinh kem file '{file_path}': {e}")
-                else:
-                    logging.warning(f"File context de dinh kem '{file_path}' khong ton tai.")
-
-    # Dinh kem cac file bao cao da tong hop (neu co)
-    if attachment_files:
-        for file_path in attachment_files:
+    if attachment_paths:
+        for file_path in attachment_paths:
             if os.path.exists(file_path):
                 try:
                     with open(file_path, 'rb') as attachment:
                         part = MIMEApplication(attachment.read(), Name=os.path.basename(file_path))
                     part['Content-Disposition'] = f'attachment; filename="{os.path.basename(file_path)}"'
                     msg.attach(part)
-                    logging.info(f"Da dinh kem file bao cao da tong hop: '{file_path}'")
+                    logging.info(f"[{firewall_id}] Đã đính kèm file: '{file_path}'")
                 except Exception as e:
-                    logging.error(f"Loi khi dinh kem file bao cao '{file_path}': {e}")
+                    logging.error(f"[{firewall_id}] Lỗi khi đính kèm file '{file_path}': {e}")
             else:
-                logging.warning(f"File bao cao de dinh kem '{file_path}' khong ton tai.")
+                logging.warning(f"[{firewall_id}] File đính kèm '{file_path}' không tồn tại.")
 
-    # Gui email
+    # Gửi email
     try:
         server = smtplib.SMTP(config.get('Email', 'SMTPServer'), config.getint('Email', 'SMTPPort'))
         server.starttls()
         server.login(sender_email, sender_password)
         server.sendmail(sender_email, recipient_emails_list, msg.as_string())
         server.quit()
-        logging.info("Email da duoc gui thanh cong!")
+        logging.info(f"[{firewall_id}] Email đã được gửi thành công!")
     except Exception as e:
-        logging.error(f"Loi khi gui email: {e}")
+        logging.error(f"[{firewall_id}] Lỗi khi gửi email: {e}")
 
-def read_bonus_context_files(config):
+def read_bonus_context_files(config, firewall_section):
+    """Đọc tất cả các file bối cảnh được định nghĩa trong section của firewall."""
     context_parts = []
-    if not config.has_section('Bonus_Context'):
+    
+    standard_keys = ['pfsensehostname', 'logfile', 'hourstoanalyze', 'timezone', 
+                     'reportdirectory', 'recipientemails', 'summary_enabled', 
+                     'reports_per_summary', 'summary_recipient_emails',
+                     'prompt_file', 'summary_prompt_file']
+    context_keys = [key for key in config.options(firewall_section) if key not in standard_keys]
+
+    if not context_keys:
         return "Không có thông tin bối cảnh bổ sung nào được cung cấp."
         
-    for key, file_path in config.items('Bonus_Context'):
-        file_path = file_path.strip()
+    for key in context_keys:
+        file_path = config.get(firewall_section, key).strip()
         if os.path.exists(file_path):
             try:
-                logging.info(f"Dang doc file boi canh: '{file_path}'")
+                logging.info(f"[{firewall_section}] Đang đọc file bối cảnh: '{file_path}'")
                 with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
                     content = f.read()
                     file_name = os.path.basename(file_path)
                     context_parts.append(f"--- START OF FILE: {file_name} ---\n{content}\n--- END OF FILE: {file_name} ---")
             except Exception as e:
-                logging.error(f"Loi khi doc file boi canh '{file_path}': {e}")
+                logging.error(f"[{firewall_section}] Lỗi khi đọc file bối cảnh '{file_path}': {e}")
         else:
-            logging.warning(f"File boi canh '{file_path}' khong ton tai. Bo qua.")
+            logging.warning(f"[{firewall_section}] File bối cảnh '{file_path}' không tồn tại. Bỏ qua.")
             
     return "\n\n".join(context_parts) if context_parts else "Không có thông tin bối cảnh bổ sung nào được cung cấp."
 
-def save_structured_report(report_data, timezone_str, base_report_dir, is_summary=False):
-    # luu du lieu tho ra file json
+def save_structured_report(firewall_id, report_data, timezone_str, base_report_dir, is_summary=False):
+    """Lưu dữ liệu thô ra file JSON, có tổ chức theo thư mục."""
     try:
         tz = pytz.timezone(timezone_str)
         now = datetime.now(tz)
@@ -266,255 +257,217 @@ def save_structured_report(report_data, timezone_str, base_report_dir, is_summar
         date_folder = now.strftime('%Y-%m-%d')
         time_filename = now.strftime('%H-%M-%S') + '.json'
         
-        # luu bao cao tong hop vao thu muc con
-        report_folder_path = os.path.join(base_report_dir, date_folder)
-        if is_summary:
-            report_folder_path = os.path.join(base_report_dir, "summary", date_folder)
-
+        report_folder_path = os.path.join(base_report_dir, "summary", date_folder) if is_summary else os.path.join(base_report_dir, date_folder)
         os.makedirs(report_folder_path, exist_ok=True)
         
         report_file_path = os.path.join(report_folder_path, time_filename)
 
         with open(report_file_path, 'w', encoding='utf-8') as f:
             json.dump(report_data, f, ensure_ascii=False, indent=4)
-        logging.info(f"Da luu bao cao JSON vao file: '{report_file_path}'")
+        logging.info(f"[{firewall_id}] Đã lưu báo cáo JSON vào: '{report_file_path}'")
             
     except Exception as e:
-        logging.error(f"Loi khi luu file bao cao JSON: {e}")
+        logging.error(f"[{firewall_id}] Lỗi khi lưu file JSON: {e}")
 
-def run_analysis_cycle(config):
-    logging.info("Bat dau chu ky phan tich log dinh ky.")
+# --- hàm chu kỳ ---
+
+def run_analysis_cycle(config, firewall_section):
+    """Chạy một chu kỳ phân tích định kỳ cho một firewall cụ thể."""
+    logging.info(f"[{firewall_section}] Bắt đầu chu kỳ phân tích log.")
     
-    log_file = config.get('Syslog', 'LogFile')
-    hours = config.getint('Syslog', 'HoursToAnalyze')
-    timezone = config.get('System', 'TimeZone')
+    log_file = config.get(firewall_section, 'LogFile')
+    hours = config.getint(firewall_section, 'HoursToAnalyze')
+    hostname = config.get(firewall_section, 'PFSenseHostname')
+    timezone = config.get(firewall_section, 'TimeZone')
+    report_dir = config.get(firewall_section, 'ReportDirectory')
+    recipient_emails = config.get(firewall_section, 'RecipientEmails')
+    
+    # Lấy đường dẫn prompt từ config, nếu không có thì dùng mặc định 
+    prompt_file = config.get(firewall_section, 'prompt_file', fallback=PROMPT_TEMPLATE_FILE)
+    
     gemini_api_key = config.get('Gemini', 'APIKey')
-    hostname = config.get('System', 'PFSenseHostname')
-    report_dir = config.get('System', 'ReportDirectory', fallback='reports')
-    recipient_emails = config.get('Email', 'RecipientEmails')
         
     if not gemini_api_key or "YOUR_API_KEY" in gemini_api_key:
-        logging.error("Loi: 'APIKey' trong file config.ini chua duoc thiet lap.")
+        logging.error(f"[{firewall_section}] Lỗi: 'APIKey' chưa được thiết lập. Bỏ qua.")
         return
     
-    logs_content, start_time_obj, end_time_obj = read_new_log_entries(log_file, hours, timezone)
+    logs_content, start_time, end_time = read_new_log_entries(log_file, hours, timezone, firewall_section)
     if logs_content is None:
-        logging.error("Khong the tiep tuc do khong doc duoc file log.")
+        logging.error(f"[{firewall_section}] Không thể tiếp tục do lỗi đọc file log.")
         return
 
-    bonus_context_content = read_bonus_context_files(config)
-    analysis_result_raw = analyze_logs_with_gemini(logs_content, bonus_context_content, gemini_api_key, PROMPT_TEMPLATE_FILE)
+    bonus_context = read_bonus_context_files(config, firewall_section)
+    #Truyền đường dẫn prompt đã lấy được vào hàm phân tích
+    analysis_raw = analyze_logs_with_gemini(firewall_section, logs_content, bonus_context, gemini_api_key, prompt_file)
 
     summary_data = {"total_blocked_events": "N/A", "top_blocked_source_ip": "N/A", "alerts_count": "N/A"}
-    analysis_markdown = analysis_result_raw
-
+    analysis_markdown = analysis_raw
     try:
-        json_match = re.search(r'```json\n(.*?)\n```', analysis_result_raw, re.DOTALL)
+        json_match = re.search(r'```json\n(.*?)\n```', analysis_raw, re.DOTALL)
         if json_match:
-            json_str = json_match.group(1)
-            summary_data = json.loads(json_str)
-            analysis_markdown = analysis_result_raw.replace(json_match.group(0), "").strip()
+            summary_data = json.loads(json_match.group(1))
+            analysis_markdown = analysis_raw.replace(json_match.group(0), "").strip()
     except Exception as e:
-        logging.warning(f"Khong the phan tich JSON tom tat tu AI: {e}")
+        logging.warning(f"[{firewall_section}] Không thể trích xuất JSON: {e}")
 
-    report_data_for_json = {
-        "hostname": hostname,
-        "analysis_start_time": start_time_obj.isoformat(),
-        "analysis_end_time": end_time_obj.isoformat(),
+    report_data = {
+        "hostname": hostname, "analysis_start_time": start_time.isoformat(), "analysis_end_time": end_time.isoformat(),
         "report_generated_time": datetime.now(pytz.timezone(timezone)).isoformat(),
-        "summary_stats": summary_data,
-        "analysis_details_markdown": analysis_markdown
+        "summary_stats": summary_data, "analysis_details_markdown": analysis_markdown
     }
-    
-    save_structured_report(report_data_for_json, timezone, report_dir, is_summary=False)
+    save_structured_report(firewall_section, report_data, timezone, report_dir)
 
     email_subject = f"Báo cáo Log pfSense [{hostname}] - {datetime.now(pytz.timezone(timezone)).strftime('%Y-%m-%d %H:%M')}"
-    
     try:
-        with open(EMAIL_TEMPLATE_FILE, 'r', encoding='utf-8') as f:
-            email_template = f.read()
-        
+        with open(EMAIL_TEMPLATE_FILE, 'r', encoding='utf-8') as f: email_template = f.read()
         analysis_html = markdown.markdown(analysis_markdown)
-        time_format = '%H:%M:%S %d-%m-%Y'
-        start_time_str = start_time_obj.strftime(time_format)
-        end_time_str = end_time_obj.strftime(time_format)
-
-        email_body_html = email_template.format(
-            hostname=hostname,
-            analysis_result=analysis_html,
+        email_body = email_template.format(
+            hostname=hostname, analysis_result=analysis_html,
             total_blocked=summary_data.get("total_blocked_events", "N/A"),
             top_ip=summary_data.get("top_blocked_source_ip", "N/A"),
             critical_alerts=summary_data.get("alerts_count", "N/A"),
-            start_time=start_time_str,
-            end_time=end_time_str
+            start_time=start_time.strftime('%H:%M:%S %d-%m-%Y'),
+            end_time=end_time.strftime('%H:%M:%S %d-%m-%Y')
         )
         
-        send_email(email_subject, email_body_html, config, recipient_emails)
-    except FileNotFoundError:
-        logging.error(f"Loi: Khong tim thay file email template '{EMAIL_TEMPLATE_FILE}'. Email se khong duoc gui.")
+        attachments_to_send = []
+        if config.getboolean('Attachments', 'AttachContextFiles', fallback=False):
+            standard_keys = ['pfsensehostname', 'logfile', 'hourstoanalyze', 'timezone', 'reportdirectory', 'recipientemails', 'summary_enabled', 'reports_per_summary', 'summary_recipient_emails', 'prompt_file', 'summary_prompt_file']
+            context_keys = [key for key in config.options(firewall_section) if key not in standard_keys]
+            attachments_to_send = [config.get(firewall_section, key) for key in context_keys]
+
+        send_email(firewall_section, email_subject, email_body, config, recipient_emails, attachment_paths=attachments_to_send)
     except Exception as e:
-        logging.error(f"Loi khi tao noi dung email: {e}")
+        logging.error(f"[{firewall_section}] Lỗi khi tạo/gửi email: {e}")
 
-    logging.info("Hoan tat chu ky phan tich dinh ky.")
+    logging.info(f"[{firewall_section}] Hoàn tất chu kỳ phân tích.")
 
-
-def run_summary_analysis_cycle(config):
-    logging.info("Bat dau chu ky phan tich TONG HOP.")
+def run_summary_analysis_cycle(config, firewall_section):
+    """Chạy một chu kỳ phân tích TỔNG HỢP cho một firewall."""
+    logging.info(f"[{firewall_section}] Bắt đầu chu kỳ phân tích TỔNG HỢP.")
     
-    reports_per_summary = config.getint('SummaryReport', 'reports_per_summary')
-    report_dir = config.get('System', 'ReportDirectory', fallback='reports')
-    timezone = config.get('System', 'TimeZone')
+    reports_per_summary = config.getint(firewall_section, 'reports_per_summary')
+    report_dir = config.get(firewall_section, 'ReportDirectory')
+    timezone = config.get(firewall_section, 'TimeZone')
+    hostname = config.get(firewall_section, 'PFSenseHostname')
+    recipient_emails = config.get(firewall_section, 'summary_recipient_emails')
     gemini_api_key = config.get('Gemini', 'APIKey')
-    hostname = config.get('System', 'PFSenseHostname')
-    recipient_emails = config.get('SummaryReport', 'recipient_emails')
 
-    # Tim N file report moi nhat
+    # Lấy đường dẫn summary prompt từ config
+    summary_prompt_file = config.get(firewall_section, 'summary_prompt_file', fallback=SUMMARY_PROMPT_TEMPLATE_FILE)
+
     report_files_pattern = os.path.join(report_dir, "*", "*.json")
     all_reports = sorted(glob.glob(report_files_pattern), key=os.path.getmtime, reverse=True)
     
-    # loai tru cac bao cao tong hop da co
-    all_reports = [r for r in all_reports if "summary" not in r]
-    
-    reports_to_summarize = all_reports[:reports_per_summary]
-
+    reports_to_summarize = [r for r in all_reports if "summary" not in r][:reports_per_summary]
     if not reports_to_summarize:
-        logging.warning("Khong tim thay file bao cao nao de tong hop. Bo qua.")
+        logging.warning(f"[{firewall_section}] Không tìm thấy file báo cáo nào để tổng hợp.")
         return
 
-    logging.info(f"Se tong hop tu {len(reports_to_summarize)} bao cao gan nhat: {reports_to_summarize}")
+    logging.info(f"[{firewall_section}] Sẽ tổng hợp từ {len(reports_to_summarize)} báo cáo: {reports_to_summarize}")
 
-    combined_analysis = []
-    start_time_overall = None
-    end_time_overall = None
-
-    for report_path in reversed(reports_to_summarize): # xu ly theo thu tu thoi gian
+    combined_analysis, start_time, end_time = [], None, None
+    for report_path in reversed(reports_to_summarize):
         try:
             with open(report_path, 'r', encoding='utf-8') as f:
-                report_data = json.load(f)
-                combined_analysis.append(f"--- BÁO CÁO TỪ {report_data['analysis_start_time']} ĐẾN {report_data['analysis_end_time']} ---\n\n" + report_data['analysis_details_markdown'])
+                data = json.load(f)
+                combined_analysis.append(f"--- BÁO CÁO TỪ {data['analysis_start_time']} ĐẾN {data['analysis_end_time']} ---\n\n{data['analysis_details_markdown']}")
                 
-                # Cap nhat thoi gian tong the
-                start_time_report = datetime.fromisoformat(report_data['analysis_start_time'])
-                end_time_report = datetime.fromisoformat(report_data['analysis_end_time'])
-                if start_time_overall is None or start_time_report < start_time_overall:
-                    start_time_overall = start_time_report
-                if end_time_overall is None or end_time_report > end_time_overall:
-                    end_time_overall = end_time_report
-
+                s_time = datetime.fromisoformat(data['analysis_start_time'])
+                e_time = datetime.fromisoformat(data['analysis_end_time'])
+                if start_time is None or s_time < start_time: start_time = s_time
+                if end_time is None or e_time > end_time: end_time = e_time
         except Exception as e:
-            logging.error(f"Loi khi doc file bao cao '{report_path}': {e}")
-            continue
-    
+            logging.error(f"[{firewall_section}] Lỗi khi đọc file '{report_path}': {e}")
+
     if not combined_analysis:
-        logging.error("Khong the doc noi dung tu bat ky file bao cao nao. Bo qua.")
+        logging.error(f"[{firewall_section}] Không thể đọc nội dung từ bất kỳ file nào.")
         return
 
     reports_content = "\n\n".join(combined_analysis)
-    bonus_context_content = read_bonus_context_files(config)
-    
-    summary_analysis_raw = analyze_logs_with_gemini(reports_content, bonus_context_content, gemini_api_key, SUMMARY_PROMPT_TEMPLATE_FILE)
+    bonus_context = read_bonus_context_files(config, firewall_section)
+    # đường dẫn summary prompt 
+    summary_raw = analyze_logs_with_gemini(firewall_section, reports_content, bonus_context, gemini_api_key, summary_prompt_file)
 
     summary_data = {"total_blocked_events_period": "N/A", "most_frequent_issue": "N/A", "total_alerts_period": "N/A"}
-    analysis_markdown = summary_analysis_raw
-
+    analysis_markdown = summary_raw
     try:
-        json_match = re.search(r'```json\n(.*?)\n```', summary_analysis_raw, re.DOTALL)
+        json_match = re.search(r'```json\n(.*?)\n```', summary_raw, re.DOTALL)
         if json_match:
-            json_str = json_match.group(1)
-            summary_data = json.loads(json_str)
-            analysis_markdown = summary_analysis_raw.replace(json_match.group(0), "").strip()
+            summary_data = json.loads(json_match.group(1))
+            analysis_markdown = summary_raw.replace(json_match.group(0), "").strip()
     except Exception as e:
-        logging.warning(f"Khong the phan tich JSON tom tat tu AI (summary): {e}")
+        logging.warning(f"[{firewall_section}] Không thể trích xuất JSON tổng hợp: {e}")
 
-    report_data_for_json = {
-        "hostname": hostname,
-        "analysis_start_time": start_time_overall.isoformat() if start_time_overall else "N/A",
-        "analysis_end_time": end_time_overall.isoformat() if end_time_overall else "N/A",
+    report_data = {
+        "hostname": hostname, "analysis_start_time": start_time.isoformat() if start_time else "N/A",
+        "analysis_end_time": end_time.isoformat() if end_time else "N/A",
         "report_generated_time": datetime.now(pytz.timezone(timezone)).isoformat(),
-        "summary_stats": summary_data,
-        "analysis_details_markdown": analysis_markdown,
+        "summary_stats": summary_data, "analysis_details_markdown": analysis_markdown,
         "summarized_files": reports_to_summarize
     }
-    
-    save_structured_report(report_data_for_json, timezone, report_dir, is_summary=True)
+    save_structured_report(firewall_section, report_data, timezone, report_dir, is_summary=True)
 
     email_subject = f"Báo cáo TỔNG HỢP Log pfSense [{hostname}] - {datetime.now(pytz.timezone(timezone)).strftime('%Y-%m-%d')}"
-
     try:
-        with open(SUMMARY_EMAIL_TEMPLATE_FILE, 'r', encoding='utf-8') as f:
-            email_template = f.read()
-        
+        with open(SUMMARY_EMAIL_TEMPLATE_FILE, 'r', encoding='utf-8') as f: email_template = f.read()
         analysis_html = markdown.markdown(analysis_markdown)
-        time_format = '%H:%M:%S %d-%m-%Y'
-        start_time_str = start_time_overall.strftime(time_format) if start_time_overall else "N/A"
-        end_time_str = end_time_overall.strftime(time_format) if end_time_overall else "N/A"
-
-        email_body_html = email_template.format(
-            hostname=hostname,
-            analysis_result=analysis_html,
+        email_body = email_template.format(
+            hostname=hostname, analysis_result=analysis_html,
             total_blocked=summary_data.get("total_blocked_events_period", "N/A"),
-            top_issue=summary_data.get("most_frequent_issue", "N/A"), # sua ten bien
+            top_issue=summary_data.get("most_frequent_issue", "N/A"),
             critical_alerts=summary_data.get("total_alerts_period", "N/A"),
-            start_time=start_time_str,
-            end_time=end_time_str
+            start_time=start_time.strftime('%H:%M:%S %d-%m-%Y') if start_time else "N/A",
+            end_time=end_time.strftime('%H:%M:%S %d-%m-%Y') if end_time else "N/A"
         )
-
-        send_email(email_subject, email_body_html, config, recipient_emails, attachment_files=reports_to_summarize) # dinh kem file
-    except FileNotFoundError:
-        logging.error(f"Loi: Khong tim thay file email template '{SUMMARY_EMAIL_TEMPLATE_FILE}'. Email se khong duoc gui.")
+        send_email(firewall_section, email_subject, email_body, config, recipient_emails, attachment_paths=reports_to_summarize)
     except Exception as e:
-        logging.error(f"Loi khi tao noi dung email tong hop: {e}")
+        logging.error(f"[{firewall_section}] Lỗi khi tạo/gửi email tổng hợp: {e}")
 
-    logging.info("Hoan tat chu ky phan tich TONG HOP.")
+    logging.info(f"[{firewall_section}] Hoàn tất chu kỳ TỔNG HỢP.")
 
 
 def main():
     while True:
-        # doc config mot lan duy nhat
-        config = configparser.ConfigParser()
+        config = configparser.ConfigParser(interpolation=None)
         if not os.path.exists(CONFIG_FILE):
-            logging.error(f"Loi: File cau hinh '{CONFIG_FILE}' khong ton tai. Thoat.")
+            logging.error(f"Lỗi: File cấu hình '{CONFIG_FILE}' không tồn tại. Thoát.")
             return
         config.read(CONFIG_FILE)
 
-        try:
-            run_analysis_cycle(config)
-        except Exception as e:
-            logging.error(f"Gap loi nghiem trong khi chay phan tich dinh ky: {e}")
+        firewall_sections = [s for s in config.sections() if s.startswith('Firewall_')]
+        if not firewall_sections:
+            logging.warning("Không tìm thấy section firewall nào (ví dụ: [Firewall_...]) trong config.ini. Sẽ không có gì được thực thi.")
+        else:
+            logging.info(f"Phát hiện {len(firewall_sections)} firewall để xử lý: {firewall_sections}")
 
-
-        try:
-            summary_enabled = config.getboolean('SummaryReport', 'enabled', fallback=False)
-            if summary_enabled:
-                logging.info("Kiem tra de kich hoat bao cao tong hop...")
-                reports_per_summary = config.getint('SummaryReport', 'reports_per_summary')
-                current_count = get_summary_count() + 1
+        for section in firewall_sections:
+            logging.info(f"--- BẮT ĐẦU XỬ LÝ CHO FIREWALL: {section} ---")
+            try:
+                run_analysis_cycle(config, section)
                 
-                logging.info(f"Dem bao cao tong hop: {current_count}/{reports_per_summary}")
-                
-                if current_count >= reports_per_summary:
-                    logging.info("Dat nguong, bat dau tao bao cao tong hop.")
-                    run_summary_analysis_cycle(config)
-                    save_summary_count(0) # Reset bo dem sau khi chay
+                if config.getboolean(section, 'summary_enabled', fallback=False):
+                    reports_per_summary = config.getint(section, 'reports_per_summary')
+                    current_count = get_summary_count(section) + 1
+                    
+                    logging.info(f"[{section}] Đếm báo cáo tổng hợp: {current_count}/{reports_per_summary}")
+                    
+                    if current_count >= reports_per_summary:
+                        logging.info(f"[{section}] Đạt ngưỡng, bắt đầu tạo báo cáo tổng hợp.")
+                        run_summary_analysis_cycle(config, section)
+                        save_summary_count(0, section)
+                    else:
+                        save_summary_count(current_count, section)
                 else:
-                    save_summary_count(current_count) # Luu bo dem moi
-            else:
-                 # neu tinh nang tat, dam bao file dem khong ton tai hoac reset
-                if os.path.exists(SUMMARY_COUNT_FILE):
-                    save_summary_count(0)
-        except (configparser.NoSectionError, configparser.NoOptionError, ValueError) as e:
-            logging.warning(f"Khong the doc cau hinh SummaryReport hoac bi loi: {e}. Bo qua chu ky tong hop.")
-        except Exception as e:
-            logging.error(f"Gap loi nghiem trong khi xu ly chu ky tong hop: {e}")
+                    if os.path.exists(f".summary_report_count_{section}"):
+                        save_summary_count(0, section)
 
+            except Exception as e:
+                logging.error(f"Lỗi nghiêm trọng khi xử lý firewall '{section}': {e}", exc_info=True)
+            logging.info(f"--- KẾT THÚC XỬ LÝ CHO FIREWALL: {section} ---")
         
-        interval_seconds = 3600 # gia tri mac dinh
-        try:
-            interval_seconds = config.getint('System', 'RunIntervalSeconds')
-        except Exception as e:
-            logging.error(f"Khong the doc 'RunIntervalSeconds' tu config.ini: {e}. Su dung gia tri mac dinh la {interval_seconds} giay.")
-        
-        logging.info(f"Chu ky tiep theo se bat dau sau {interval_seconds} giay. Tam nghi...")
+        interval_seconds = config.getint('System', 'RunIntervalSeconds', fallback=3600)
+        logging.info(f"Tất cả các firewall đã được xử lý. Chu kỳ tiếp theo sẽ bắt đầu sau {interval_seconds} giây.")
         time.sleep(interval_seconds)
 
 if __name__ == "__main__":

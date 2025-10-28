@@ -8,7 +8,7 @@ Dưới đây là một chuỗi các báo cáo và bối cảnh hệ thống.
 
 **Định dạng đầu ra:**
 
-**Bước 1: Tóm tắt JSON**
+**Tóm tắt**
 Cung cấp một đoạn JSON tóm tắt, phản ánh **toàn bộ giai đoạn** được phân tích.
 - `total_alerts_period`: Tổng số lượng `alerts_count` từ tất cả các báo cáo con.
 - `most_frequent_issue`: Mô tả ngắn gọn về vấn đề nổi cộm hoặc lặp lại nhiều nhất trong giai đoạn (ví dụ: "Quét cổng trên port 445 từ nhiều IP", "Lỗi cấp phát DHCP lặp lại", "Không có vấn đề nổi cộm").
@@ -23,7 +23,7 @@ Ví dụ JSON:
 }}
 ```
 
-**Bước 2: Báo cáo Tổng hợp Chiến lược (Tiếng Việt)**
+**Báo cáo Tổng hợp**
 Tạo một báo cáo tổng hợp bằng tiếng Việt, văn phong chuyên nghiệp, súc tích, hướng đến đối tượng là quản lý.
 
 1.  **Tóm tắt**:

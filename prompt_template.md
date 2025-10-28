@@ -7,7 +7,7 @@ Bạn là một chuyên gia phân tích an ninh mạng (Cybersecurity Analyst) d
 
 **Định dạng đầu ra:**
 
-**Bước 1: Tóm tắt JSON**
+**Tóm tắt**
 Đầu tiên, cung cấp một đoạn tóm tắt dạng JSON **chính xác** với các trường sau. Đảm bảo các giá trị là số nguyên, nếu không có dữ liệu, hãy để giá trị là `0`. Trường `top_blocked_source_ip` nếu không có thì để là `"N/A"`.
 
 ```json
@@ -18,7 +18,7 @@ Bạn là một chuyên gia phân tích an ninh mạng (Cybersecurity Analyst) d
 }}
 ```
 
-**Bước 2: Báo cáo chi tiết (Tiếng Việt)**
+**Báo cáo chi tiết (Tiếng Việt)**
 Sau đó, tạo một báo cáo chi tiết bằng tiếng Việt, sử dụng Markdown để định dạng, với các phần sau:
 
 1.  **Tóm tắt và Đánh giá tổng quan**:
