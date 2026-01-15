@@ -1,0 +1,235 @@
+novaon@system-ai-agent:~/AI-Log-Analyzer/backend/reports/Host_Pfsense_TK$ cat pfsense_tk_loc_log/2026-01-15/09-12-33.json
+{
+    "hostname": "Pfsense_TK",
+    "worker_name": "pfsense_TK_loc_log",
+    "analysis_start_time": "2026-01-15T06:37:44+07:00",
+    "analysis_end_time": "2026-01-15T09:10:23.484304+07:00",
+    "report_generated_time": "2026-01-15T09:12:33.620390+07:00",
+    "summary_stats": {
+        "status": "pass",
+        "stat_1_label": "Tổng số gói tin bị chặn",
+        "stat_1_value": "57",
+        "stat_2_label": "Top Source IP tấn công",
+        "stat_2_value": "192.168.9.106",
+        "stat_3_label": "Số lượng DHCPACK",
+        "stat_3_value": "170",
+        "short_summary": "Hệ thống ghi nhận số lượng lớn gói tin bị chặn từ địa chỉ IP 192.168.9.106, đồng thời hoạt động DHCP diễn ra bình thường."
+    },
+    "analysis_details_markdown": "## BÁO CÁO PHÂN TÍCH LOG HỆ THỐNG\n\n**Ngày phân tích:** 15/01/2025\n\n---\n\n### 1. Đánh giá Tổng quan\n\nDựa trên dữ liệu log được cung cấp, tình trạng hệ thống cho thấy có
+ hoạt động bất thường liên quan đến việc chặn các gói tin từ một nguồn cụ thể. Tuy nhiên, các dịch vụ khác như DHCP hoạt động ổn định.\n\n---\n\n### 2. Phân tích Chi tiết\n\n**a. Log Firewall (filterlog):**\n
+\n*   **Số lượng gói tin bị chặn (block):** Ghi nhận tổng cộng **57** sự kiện các gói tin bị chặn.\n*   **Nguồn gửi gói tin bị chặn:** Phần lớn các gói tin bị chặn có nguồn từ địa chỉ IP `192.168.9.106`.\n*
+ **Loại kết nối:** Các gói tin bị chặn chủ yếu là TCP với cờ SYN (biểu thị việc bắt đầu kết nối).\n*   **Mẫu hoạt động bất thường:** Việc lặp đi lặp lại các gói tin SYN bị chặn từ cùng một địa chỉ IP (`192.16
+8.9.106`) đến một địa chỉ IP đích (`192.168.5.150`) trên cùng một cổng và với các tham số TCP tương tự nhau có thể là dấu hiệu của một cuộc tấn công quét cổng hoặc DoS (Denial of Service) ở mức độ cơ bản.\n\n
+**b. Log DHCP (dhcpd):**\n\n*   **Hoạt động:** Dịch vụ DHCP hoạt động bình thường, ghi nhận các yêu cầu DHCP (`DHCPREQUEST`, `DHCPDISCOVER`) và phản hồi cấp phát địa chỉ IP (`DHCPACK`).\n*   **Số lượng cấp ph
+át:** Có tổng cộng **170** lượt cấp phát DHCP (`DHCPACK`), cho thấy các thiết bị đang kết nối và hoạt động trong mạng.\n*   **Tái sử dụng lease:** Các bản ghi `reuse_lease` cho thấy hệ thống đang quản lý hiệu
+ quả các địa chỉ IP đã được cấp phát trước đó.\n*   **Thông tin thiết bị:** Nhiều bản ghi DHCP bao gồm tên thiết bị và địa chỉ MAC, cung cấp thông tin hữu ích về các thiết bị kết nối vào mạng.\n\n**c. Log VPN
+ (charon):**\n\n*   **Hoạt động:** Hệ thống ghi nhận các hoạt động liên quan đến VPN, bao gồm:\n    *   **Rekeying:** Các bản ghi `creating rekey job` và `establishing CHILD_SA` cho thấy quá trình làm mới các
+ khóa mã hóa cho các kết nối VPN đang diễn diễn ra bình thường.\n    *   **Kết nối không thành công:** Một số kết nối VPN (`IKE_SA (unnamed)[236]`, `IKE_SA (unnamed)[237]`) không thiết lập được do `no IKE con
+fig found`, có thể là do cấu hình sai hoặc cố gắng kết nối từ các mạng/thiết bị không được phép.\n*   **Thông tin chi tiết:** Các bản ghi VPN cung cấp thông tin chi tiết về các tham số cấu hình và địa chỉ IP
+của các điểm kết nối VPN.\n\n---\n\n### 3. Cảnh báo & Phát hiện\n\n*   **Hoạt động nghi ngờ tấn công từ chối dịch vụ (DoS) hoặc quét cổng:**\n    *   **Nguồn:** `192.168.9.106`\n    *   **Đích:** `192.168.5.1
+50`\n    *   **Mô tả:** Lặp đi lặp lại các gói tin TCP SYN bị chặn. Đây là hành vi đáng ngờ cần được điều tra thêm.\n*   **Các kết nối VPN không thành công:**\n    *   Ghi nhận một số kết nối IKEv1 và IKEv2 k
+hông thiết lập được do thiếu cấu hình phù hợp (`no IKE config found`, `NO_PROP`), điều này có thể do các IP nguồn không được ủy quyền hoặc các vấn đề về cấu hình trên thiết bị đầu xa.\n\n---\n\n### 4. Đề xuất
+\n\n1.  **Điều tra hoạt động đáng ngờ từ IP `192.168.9.106`:**\n    *   Xác định thiết bị nào đang sử dụng địa chỉ IP `192.168.9.106`.\n    *   Kiểm tra lưu lượng truy cập của thiết bị này để xác định mục đíc
+h của các gói tin TCP SYN bị chặn.\n    *   Nếu hoạt động này là độc hại, hãy xem xét chặn hoàn toàn địa chỉ IP nguồn `192.168.9.106` tại tường lửa.\n2.  **Rà soát cấu hình VPN:**\n    *   Kiểm tra các kết nố
+i VPN không thành công để xác định IP nguồn và nguyên nhân cụ thể của lỗi `no IKE config found` hoặc `NO_PROP`.\n    *   Cập nhật cấu hình VPN nếu cần thiết để cho phép các kết nối hợp lệ và loại bỏ các kết n
+ối không mong muốn.\n3.  **Giám sát liên tục:**\n    *   Tiếp tục giám sát log hệ thống để phát hiện các hành vi bất thường tương tự hoặc các loại tấn công khác.\n    *   Thiết lập cảnh báo tự động cho các sự
+ kiện chặn gói tin số lượng lớn từ một nguồn duy nhất.",
+    "stage_index": 0,
+    "report_type": "pfsense_TK_loc_log",
+    "raw_log_count": 2140
+}
+
+
+
+
+
+novaon@system-ai-agent:~/AI-Log-Analyzer/backend/reports/Host_Pfsense_TK$ cat pfsense_tk_reduce/2026-01-14/14-46-53.json
+{
+    "hostname": "Pfsense_TK",
+    "analysis_start_time": "2026-01-14T12:50:38+07:00",
+    "analysis_end_time": "2026-01-14T14:33:03.845670+07:00",
+    "report_generated_time": "2026-01-14T14:46:53.791013+07:00",
+    "raw_log_count": 16167,
+    "summary_stats": {
+        "status": "warning",
+        "stat_1_label": "Tổng số lỗi 'No such file or directory'",
+        "stat_1_value": "372",
+        "stat_2_label": "IP nguồn truy cập bất thường chính",
+        "stat_2_value": "35.198.244.252",
+        "stat_3_label": "Tỷ lệ yêu cầu lỗi (4xx, 5xx) từ nguồn chính",
+        "stat_3_value": "100%",
+        "short_summary": "Hệ thống ghi nhận hoạt động quét lỗ hổng nghiêm trọng từ IP 35.198.244.252, gây ra 100% yêu cầu lỗi 'No such file or directory'. Báo cáo này dựa trên dữ liệu chưa đầy đủ do một số th
+ành phần phân tích không hoàn thành."
+    },
+    "analysis_details_markdown": "## BÁO CÁO TỔNG QUAN GIAI ĐOẠN PHÂN TÍCH LOG HỆ THỐNG\n\n**Ngày báo cáo:** 20 tháng 10 năm 2025\n\n### 1. Tổng quan & Xu hướng\n\nHệ thống cho thấy các dấu hiệu của hoạt động
+ bất thường và không ổn định trong giai đoạn này, chủ yếu xuất phát từ một chiến dịch quét lỗ hổng bảo mật tập trung. Mặc dù các thành phần phân tích khác đã không hoàn thành, dữ liệu hiện có từ `pfsense_TKw2
+` cho thấy một bức tranh đáng lo ngại về an ninh.\n\n*   **Ổn định hệ thống:** Dựa trên dữ liệu có sẵn, hệ thống không thể được coi là ổn định do sự hiện diện của một chiến dịch quét lỗ hổng liên tục và có mụ
+c đích. Mặc dù các lỗi `No such file or directory` cho thấy các yêu cầu không tìm thấy tài nguyên, tần suất và bản chất của các yêu cầu này chỉ ra một mối đe dọa tiềm tàng.\n*   **Xu hướng sự kiện:** Có một x
+u hướng rõ ràng là tăng đột biến các yêu cầu web không hợp lệ, tất cả đều báo lỗi file/directory không tồn tại. Điều này được thúc đẩy bởi một địa chỉ IP nguồn duy nhất (`35.198.244.252`) với tần suất rất cao
+. Bên cạnh đó, các gói tin UDP và một số kết nối TCP bị chặn bởi `filterlog` cũng cho thấy hoạt động quét hoặc dò tìm mạng song song.\n\n### 2. Vấn đề Nổi cộm (Recurring Issues)\n\nVấn đề nổi cộm và lặp lại n
+hất trong giai đoạn này là **hoạt động quét lỗ hổng bảo mật quy mô lớn và liên tục** nhắm vào máy chủ web của hệ thống.\n\n*   **Mô tả:** Địa chỉ IP `35.198.244.252` đã liên tục gửi hàng trăm yêu cầu truy cập
+ đến các đường dẫn không tồn tại trên hệ thống, bao gồm các tệp cấu hình nhạy cảm (`.git/config`, `.env`, `web.config`), các tệp hệ thống (`/etc/passwd`), các tệp nhật ký, các tệp thực thi phổ biến (`login.cg
+i`, `.php`, `.jsp`), và các điểm cuối của các ứng dụng web thông thường (`phpmyadmin`, `swagger-ui`). Toàn bộ các yêu cầu này đều thất bại với lỗi `No such file or directory` hoặc `Not a directory`.\n*   **Ph
+ân tích nguyên nhân gốc rễ (Root cause analysis):** Nguyên nhân gốc rễ là một tác nhân bên ngoài đang cố gắng dò tìm và khai thác các lỗ hổng bảo mật phổ biến trên máy chủ web. Đây có thể là một bước khởi đầu
+ của một cuộc tấn công lớn hơn, nhằm tìm kiếm các điểm yếu như Path Traversal, LFI, RCE, XSS hoặc SQL Injection. Việc các yêu cầu này không tìm thấy tài nguyên cho thấy hệ thống có thể đã được cấu hình tương
+đối an toàn hoặc các lỗ hổng mục tiêu không tồn tại, nhưng hoạt động quét vẫn tiêu tốn tài nguyên và tiềm ẩn rủi ro.\n\n### 3. Chi tiết theo nhóm sự kiện\n\n*   **Nhóm sự kiện Ứng dụng/Web Server:**\n    *
+Logs từ Nginx cho thấy một lưu lượng lớn các lỗi 4xx (cụ thể là các lỗi liên quan đến tệp không tồn tại). Điều này được gây ra bởi một tác nhân độc hại đang quét hệ thống để tìm các lỗ hổng.\n    *   Các đườn
+g dẫn được nhắm mục tiêu cho thấy kẻ tấn công đang tìm kiếm các tệp nhạy cảm, tệp cấu hình, hoặc các điểm cuối ứng dụng có thể bị khai thác.\n    *   Sự hiện diện của các payload XSS và SQL Injection trong mộ
+t số yêu cầu cho thấy ý định thử nghiệm các lỗ hổng này.\n*   **Nhóm sự kiện Mạng (Network):**\n    *   Logs từ `filterlog` cho thấy các gói tin UDP và một số kết nối TCP bị chặn. Mặc dù ít nổi bật hơn các lỗ
+i web, điều này có thể chỉ ra các hoạt động quét cổng hoặc dò tìm mạng ở tầng thấp hơn, đồng thời với hoạt động quét web.\n\n### 4. Kiến nghị Chiến lược\n\nĐể củng cố hệ thống và ứng phó với các mối đe dọa tư
+ơng tự trong tương lai, các kiến nghị sau đây được đưa ra:\n\n1.  **Tăng cường phòng thủ chủ động:**\n    *   **Triển khai/Tối ưu hóa WAF (Web Application Firewall):** Cấu hình WAF để chủ động chặn các loại y
+êu cầu quét lỗ hổng, các payload XSS/SQL Injection, và các truy cập vào các đường dẫn không hợp lệ hoặc nhạy cảm.\n    *   **Hệ thống phòng chống xâm nhập (IPS/IDS):** Đảm bảo IPS/IDS được cập nhật các quy tắ
+c mới nhất và có khả năng phát hiện và chặn các hoạt động quét mạng và web độc hại.\n2.  **Quản lý bề mặt tấn công:**\n    *   **Rà soát cấu hình Web Server:** Thường xuyên kiểm tra và cứng hóa cấu hình máy c
+hủ web (Nginx, Apache) để đảm bảo chỉ các tài nguyên cần thiết mới được công khai và truy cập, hạn chế liệt kê thư mục, và áp dụng các chính sách bảo mật HTTP nghiêm ngặt.\n    *   **Quản lý bản vá và cập nhậ
+t:** Thiết lập quy trình cập nhật thường xuyên cho tất cả các thành phần hệ thống, ứng dụng và thư viện để khắc phục các lỗ hổng đã biết.\n3.  **Giám sát và phản ứng sự cố:**\n    *   **Cải thiện cảnh báo log
+:** Thiết lập các cảnh báo tự động cho các mẫu log bất thường, chẳng hạn như số lượng lớn các lỗi 4xx/5xx từ một IP nguồn duy nhất, hoặc các yêu cầu truy cập vào các đường dẫn cấm/nhạy cảm.\n    *   **Kế hoạc
+h ứng phó sự cố (IRP):** Phát triển hoặc tinh chỉnh kế hoạch ứng phó sự cố để có thể phản ứng nhanh chóng và hiệu quả khi phát hiện các hoạt động tấn công.\n4.  **Phân tích và kiểm tra bảo mật định kỳ:**\n
+ *   **Kiểm tra lỗ hổng (Vulnerability Assessment) và Pentest:** Thực hiện các cuộc kiểm tra lỗ hổng và kiểm thử leasexâm nhập định kỳ để chủ động tìm ra các điểm yếu trước khi kẻ tấn công có thể khai thác.\n    *
+   **Phân tích log chuyên sâu:** Mặc dù báo cáo này dựa trên dữ liệu không đầy đủ, điều này nhấn mạnh sự cần thiết của một hệ thống thu thập và phân tích log toàn diện, đảm bảo tất cả các log từ các thành phầ
+n quan trọng (Firewall, IDS/IPS, SSH, Application, Database) đều được tập trung và có thể phân tích dễ dàng để có cái nhìn tổng thể về tình hình an ninh.",
+    "stage_index": 0,
+    "parallel_workers_active": 3,
+    "failed_workers": [
+        "pfsense_TK_loc_log",
+        "pfsense_TKw1"
+    ],
+    "report_type": "pfsense_TK_reduce"
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+novaon@system-ai-agent:~/AI-Log-Analyzer/backend/reports/Host_Pfsense_TK$ cat pfsense_tk_tonghop/2026-01-14/21-54-20.json
+{
+    "hostname": "Pfsense_TK",
+    "analysis_start_time": "2025-11-26T16:18:07.134451+07:00",
+    "analysis_end_time": "2025-11-27T18:11:52.257528+07:00",
+    "report_generated_time": "2026-01-14T21:54:20.845423+07:00",
+    "summary_stats": {
+        "status": "pass",
+        "stat_1_label": "Tổng số gói tin mạng bị chặn",
+        "stat_1_value": "Trên 2200 gói",
+        "stat_2_label": "Nguồn lưu lượng bất thường chính",
+        "stat_2_value": "192.168.9.123",
+        "stat_3_label": "Các cổng bị nhắm đến phổ biến",
+        "stat_3_value": "UDP/44, UDP/8610, TCP/7000",
+        "short_summary": "Hệ thống đã ghi nhận liên tục các hoạt động quét mạng và dò tìm dịch vụ từ cả nguồn nội bộ và bên ngoài, chủ yếu nhắm vào các cổng UDP/44, UDP/8610 và TCP/7000. Tình hình yêu cầu điề
+u tra và tăng cường bảo mật."
+    },
+    "analysis_details_markdown": "## Báo cáo Tổng quan Giai đoạn Phân tích Log Hệ thống (Tháng 11/2025)\n\n### 1. Tổng quan & Xu hướng\n\nTrong suốt giai đoạn phân tích log từ các thành phần hệ thống (Firewal
+l, DHCP, VPN), tình trạng chung của hệ thống được đánh giá là **có dấu hiệu bất thường và tiềm ẩn rủi ro bảo mật**. Mặc dù các dịch vụ thiết yếu như cấp phát IP động (DHCP) vẫn duy trì ổn định, hệ thống liên
+tục phải đối mặt với một lượng lớn các gói tin mạng bị chặn bởi tường lửa.\n\nXu hướng chính trong giai đoạn này là sự **dai dẳng của các hoạt động quét mạng và dò tìm dịch vụ** từ một số địa chỉ IP cụ thể, c
+ùng với các nỗ lực kết nối không mong muốn. Các sự kiện này diễn ra liên tục theo từng khoảng thời gian ghi log, cho thấy một bức tranh về áp lực bảo mật thường xuyên mà hệ thống phải chịu đựng.\n\n### 2. Vấn
+ đề Nổi cộm (Recurring Issues)\n\n1.  **Hoạt động quét mạng liên tục từ IP nội bộ `192.168.9.123`**:\n    *   **Mô tả**: Đây là vấn đề nổi bật nhất, xuyên suốt tất cả các báo cáo con. Địa chỉ IP `192.168.9.12
+3` liên tục gửi một lượng lớn gói tin UDP (trên 2200 gói tin được ghi nhận rõ ràng, thực tế có thể cao hơn) tới nhiều địa chỉ IP đích khác nhau trong dải mạng nội bộ `192.168.5.x`. Các gói tin này chủ yếu nhắ
+m vào cổng UDP 44 và đôi khi là 8610, và đều bị tường lửa chặn.\n    *   **Phân tích Nguyên nhân Gốc rễ (Root Cause Analysis - RCA) tiềm năng**:\n        *   **Thiết bị bị nhiễm mã độc**: Đây là khả năng cao
+nhất. Một thiết bị trong mạng nội bộ với IP `192.168.9.123` có thể đã bị xâm nhập và đang thực hiện các hoạt động quét mạng để tìm kiếm các mục tiêu khác hoặc chuẩn bị cho một cuộc tấn công lớn hơn.\n
+*   **Cấu hình thiết bị sai**: Một thiết bị phần cứng hoặc phần mềm được cấu hình không chính xác có thể đang phát ra các gói tin không mong muốn.\n        *   **Hành vi người dùng độc hại**: Một người dùng n
+ội bộ có thể đang cố gắng dò tìm lỗ hổng trong mạng.\n\n2.  **Nỗ lực kết nối TCP/VPN bất thường bị chặn**:\n    *   **Mô tả**: Ngoài các gói tin UDP, hệ thống cũng ghi nhận nhiều nỗ lực thiết lập kết nối TCP
+(với cờ SYN) từ các nguồn khác nhau (cả nội bộ và bên ngoài, ví dụ: `192.168.100.168`, `192.168.101.67`, `192.168.101.125`, các IP công cộng) nhắm vào cổng TCP 7000 và các cổng khác. Bên cạnh đó, có các log g
+hi nhận nỗ lực thiết lập kết nối VPN (IKEv1/IKEv2) từ các IP bên ngoài đã thất bại do không tìm thấy cấu hình phù hợp hoặc không được cho phép.\n    *   **RCA tiềm năng**: Các nỗ lực này thường là dấu hiệu củ
+a việc quét cổng (port scanning) để tìm kiếm các dịch vụ dễ bị tấn công hoặc là các cuộc tấn công thăm dò nhằm khai thác lỗ hổng bảo mật. Đối với VPN, đó có thể là nỗ lực truy cập trái phép.\n\n3.  **Hoạt độn
+g DHCP và VPN (Charon) ổn định nhưng cần giám sát**:\n    *   **Mô tả**: Hoạt động cấp phát IP động diễn ra bình thường, cho thấy khả năng kết nối mạng cơ bản vẫn ổn định. Các kết nối VPN thông qua `charon` c
+ũng được thiết lập và duy trì (rekeying, established) một cách đều đặn, phản ánh hoạt động hợp pháp.\n    *   **RCA**: Mặc dù bình thường, sự hiện diện của các nỗ lực VPN thất bại bên cạnh các kết nối VPN thà
+nh công cho thấy nhu cầu giám sát chặt chẽ hơn đối với dịch vụ này.\n\n### 3. Chi tiết theo nhóm sự kiện\n\n*   **Nhóm Sự kiện Mạng (Network Events)**:\n    *   **Tường lửa (filterlog)**: Đây là nguồn cảnh bá
+o chính. Hàng ngàn gói tin bị chặn (chủ yếu UDP/44, UDP/8610, TCP/7000) từ nhiều nguồn khác nhau. Địa chỉ `192.168.9.123` là nguồn chiếm ưu thế cho các sự kiện UDP bị chặn. Điều này cho thấy tường lửa đang ho
+ạt động hiệu quả trong việc ngăn chặn các lưu lượng không mong muốn nhưng đồng thời cũng chỉ ra sự hiện diện liên tục của các mối đe dọa.\n    *   **DHCP Server (dhcpd)**: Hoạt động cấp phát và gia hạn địa ch
+ỉ IP diễn ra bình thường cho nhiều thiết bị khác nhau, bao gồm máy tính, điện thoại di động và các thiết bị khác trong mạng nội bộ. Không có dấu hiệu lỗi hoặc bất thường nghiêm trọng được ghi nhận.\n    *   *
+*VPN Daemon (charon)**: Ghi nhận việc thiết lập, duy trì và tái tạo khóa (rekeying) cho các kết nối VPN, thường là với các thuật toán mã hóa mạnh (AES_GCM_16_256). Tuy nhiên, có những nỗ lực thiết lập VPN thấ
+t bại từ các IP bên ngoài cần được điều tra.\n\n*   **Nhóm Sự kiện Hệ thống (System Events)**:\n    *   **SSH Guard (sshguard)**: Một số báo cáo ghi nhận việc `sshguard` khởi động lại. Điều này có thể do cấu
+hình lại hoặc một hành động quản trị, nhưng không có dấu hiệu trực tiếp của các cuộc tấn công SSH thành công được ghi nhận bởi dịch vụ này.\n\n*   **Nhóm Sự kiện Ứng dụng (Application Events)**: Không có dữ l
+iệu log ứng dụng cụ thể nào được cung cấp trong các báo cáo con để phân tích chi tiết.\n\n### 4. Kiến nghị Chiến lược\n\nĐể nâng cao an ninh và ổn định hệ thống trong dài hạn, các kiến nghị sau đây được đề xu
+ất:\n\n1.  **Điều tra và Kiểm soát triệt để IP `192.168.9.123`**:\n    *   **Ưu tiên cao nhất**: Ngay lập tức xác định thiết bị nào đang sử dụng địa chỉ IP `192.168.9.123`.\n    *   **Phân tích sâu**: Nếu là
+thiết bị nội bộ, tiến hành quét mã độc toàn diện, kiểm tra các tiến trình đang chạy và cấu hình mạng để xác định nguyên nhân gốc rễ của hoạt động quét.\n    *   **Biện pháp khắc phục**: Tùy thuộc vào kết quả
+điều tra, áp dụng các biện pháp cách ly thiết bị, vá lỗi, cấu hình lại, hoặc chặn hoàn toàn lưu lượng từ IP này nếu nó bị xác định là độc hại.\n\n2.  **Tăng cường và tinh chỉnh Quy tắc Tường lửa**:\n    *   *
+*Cổng đích**: Rà soát các quy tắc liên quan đến các cổng UDP 44, UDP 8610 và TCP 7000. Nếu không có dịch vụ hợp lệ yêu cầu lưu lượng trên các cổng này từ các nguồn không đáng tin cậy, cân nhắc thắt chặt hoặc
+chặn hoàn toàn các loại lưu lượng này.\n    *   **Chặn IP độc hại**: Cập nhật danh sách chặn IP (blacklist) cho các địa chỉ IP nguồn từ bên ngoài hoặc nội bộ có hành vi quét hoặc tấn công liên tục.\n    *   *
+*Giám sát quy tắc**: Định kỳ kiểm tra và cập nhật các quy tắc tường lửa để đảm bảo chúng vẫn phù hợp với các mối đe dọa mới và chính sách bảo mật hiện hành.\n\n3.  **Triển khai hoặc Cải thiện Hệ thống Giám sá
+t & Phản ứng (IDS/IPS)**:\n    *   **Phát hiện sớm**: Thiết lập hoặc nâng cấp hệ thống phát hiện/ngăn chặn xâm nhập (IDS/IPS) để tự động phát hiện và phản ứng với các mẫu quét mạng, tấn công từ chối dịch vụ (
+DoS) và các hoạt động độc hại khác.\n    *   **Cảnh báo thông minh**: Cấu hình cảnh báo chi tiết dựa trên ngưỡng số lượng gói tin bị chặn, IP nguồn lặp lại, và cổng đích bị nhắm đến để các đội vận hành có thể
+ phản ứng kịp thời.\n    *   **Phân tích gói tin**: Tích hợp khả năng thu thập và phân tích gói tin (packet capture) để có thể điều tra sâu hơn về bản chất của các lưu lượng đáng ngờ.\n\n4.  **Đánh giá Toàn d
+iện Bảo mật Dịch vụ VPN**:\n    *   **Xác minh**: Kiểm tra tính hợp lệ và cấu hình của tất cả các kết nối VPN hiện tại. Đảm bảo rằng chỉ có các kết nối được ủy quyền và xác thực mới được thiết lập.\n    *   *
+*Chính sách**: Rà soát chính sách bảo mật cho VPN, bao gồm các phương thức xác thực, quyền truy cập và giới hạn lưu lượng.\n    *   **Điều tra thất bại**: Phân tích kỹ lưỡng các log về nỗ lực kết nối VPN thất
+ bại để xác định liệu có phải là thăm dò từ kẻ tấn công hay không và có biện pháp ngăn chặn phù hợp.\n\n5.  **Tăng cường An ninh Nội bộ và Đào tạo Nhận thức**:\n    *   **Bảo vệ Endpoint**: Xem xét triển khai
+ giải pháp EDR (Endpoint Detection and Response) trên các thiết bị nội bộ để phát hiện và ngăn chặn các mối đe dọa từ bên trong mạng.\n    *   **Đào tạo**: Tổ chức các buổi đào tạo nhận thức bảo mật định kỳ c
+ho người dùng cuối để giảm thiểu rủi ro từ các mối đ đe dọa như phishing, malware, và kỹ thuật xã hội.",
+    "source_reports": [
+        "/home/novaon/AI-Log-Analyzer/backend/reports/Host_Pfsense_TK/pfsense_tk_loc_log/2025-11-27/16-18-15.json",
+        "/home/novaon/AI-Log-Analyzer/backend/reports/Host_Pfsense_TK/pfsense_tk_loc_log/2025-11-27/16-28-26.json",
+        "/home/novaon/AI-Log-Analyzer/backend/reports/Host_Pfsense_TK/pfsense_tk_loc_log/2025-11-27/16-38-43.json",
+        "/home/novaon/AI-Log-Analyzer/backend/reports/Host_Pfsense_TK/pfsense_tk_loc_log/2025-11-27/16-49-08.json",
+        "/home/novaon/AI-Log-Analyzer/backend/reports/Host_Pfsense_TK/pfsense_tk_loc_log/2025-11-27/16-59-27.json",
+        "/home/novaon/AI-Log-Analyzer/backend/reports/Host_Pfsense_TK/pfsense_tk_loc_log/2025-11-27/17-09-46.json",
+        "/home/novaon/AI-Log-Analyzer/backend/reports/Host_Pfsense_TK/pfsense_tk_loc_log/2025-11-27/17-20-11.json",
+        "/home/novaon/AI-Log-Analyzer/backend/reports/Host_Pfsense_TK/pfsense_tk_loc_log/2025-11-27/17-30-28.json",
+        "/home/novaon/AI-Log-Analyzer/backend/reports/Host_Pfsense_TK/pfsense_tk_loc_log/2025-11-27/17-40-48.json",
+        "/home/novaon/AI-Log-Analyzer/backend/reports/Host_Pfsense_TK/pfsense_tk_loc_log/2025-11-27/17-51-13.json",
+        "/home/novaon/AI-Log-Analyzer/backend/reports/Host_Pfsense_TK/pfsense_tk_loc_log/2025-11-27/18-01-40.json",
+        "/home/novaon/AI-Log-Analyzer/backend/reports/Host_Pfsense_TK/pfsense_tk_loc_log/2025-11-27/18-12-06.json"
+    ],
+    "stage_index": 1,
+    "report_type": "pfsense_TK_tonghop"
+}
+
+
+
+novaon@system-ai-agent:~/AI-Log-Analyzer/backend/reports/Host_Pfsense_TK$ cat pfsense_tk_final/2026-01-14/21-54-40.json
+{
+    "hostname": "Pfsense_TK",
+    "analysis_start_time": "2025-11-26T16:18:07.134451+07:00",
+    "analysis_end_time": "2025-11-27T18:11:52.257528+07:00",
+    "report_generated_time": "2026-01-14T21:54:40.648568+07:00",
+    "summary_stats": {
+        "status": "pass",
+        "stat_1_label": "Tình hình An ninh Tổng thể",
+        "stat_1_value": "Bất thường",
+        "stat_2_label": "Sự kiện Đáng chú ý nhất",
+        "stat_2_value": "Quét/Tấn công từ IP nội bộ",
+        "stat_3_label": "Tổng rủi ro/Alert",
+        "stat_3_value": "2500+",
+        "short_summary": "Hệ thống ghi nhận các hoạt động mạng bất thường nghiêm trọng, đòi hỏi hành động khẩn cấp."
+    },
+    "analysis_details_markdown": "Xin chào, đây là AI Agent đảm nhận phân tích log và báo cáo tình hình hệ thống của Novaon.\n\n---\n\n**1. Dashboard Stats (JSON)**\n\n\n**2. Báo cáo Quản trị (Tiếng Việt - Ma
+rkdown)**\n\n# Báo cáo Quản trị An ninh Hệ thống - Giai đoạn Tháng 11/2025\n\n## 1. Tóm tắt Điều hành (Executive Summary)\n\nTrong giai đoạn báo cáo gần đây (từ 26/11/2025 đến 27/11/2025), hạ tầng hệ thống củ
+a chúng ta đang đối mặt với một tình hình an ninh **bất thường và đáng lo ngại**. Mặc dù các dịch vụ cốt lõi như DHCP vẫn hoạt động ổn định, nhưng số lượng lớn các gói tin bị tường lửa chặn liên tục cho thấy
+hệ thống đang chịu áp lực từ các hoạt động quét mạng và thăm dò tiềm ẩn. Vấn đề nghiêm trọng nhất là hoạt động bất thường lặp đi lặp lại từ một địa chỉ IP nội bộ (`192.168.9.123`), có thể là dấu hiệu của một
+thiết bị bị xâm nhập hoặc cấu hình sai, đang ảnh hưởng trực tiếp đến hiệu quả phòng thủ của tường lửa.\n\n## 2. Phân tích Xu hướng\n\n*   **Áp lực lên Tường lửa:** Xu hướng xuyên suốt giai đoạn là số lượng lớ
+n các gói tin bị tường lửa chặn (`filterlog`). Điều này cho thấy hệ thống đang liên tục phải xử lý các lưu lượng truy cập không mong muốn hoặc độc hại. So với các giai đoạn trước (nếu có dữ liệu so sánh), xu
+hướng này cho thấy sự gia tăng hoặc duy trì ở mức cao, đòi hỏi sự chú ý đặc biệt.\n*   **Tăng cường các mẫu tấn công/quét nội bộ:** Việc địa chỉ IP nội bộ `192.168.9.123` liên tục là nguồn của lưu lượng bị ch
+ặn là một xu hướng đáng báo động. Điều này khác với các mối đe dọa thông thường từ bên ngoài và cho thấy nguy cơ từ chính bên trong mạng.\n*   **Hoạt động VPN có dấu hiệu bất thường:** Các bản ghi về VPN cho
+thấy sự pha trộn giữa các kết nối hợp lệ và các nỗ lực kết nối thất bại từ các nguồn không xác định. Điều này có thể là dấu hiệu của việc cấu hình sai hoặc các nỗ lực truy cập trái phép.\n\n## 3. Điểm Nóng (H
+otspots)\n\n*   **IP nguồn `192.168.9.123`:** Đây là \"điểm nóng\" chính. Địa chỉ IP này đang liên tục tạo ra lưu lượng UDP (cổng 44, 8610) và TCP (cổng 7000) nhắm vào các máy chủ nội bộ trong dải `192.168.5.
+x`. Hoạt động này là nguyên nhân chính gây ra số lượng lớn các sự kiện bị chặn bởi tường lửa.\n*   **Cổng 44, 8610 (UDP) và 7000 (TCP):** Các cổng này đang liên tục bị nhắm đến, cho thấy chúng có thể là mục t
+iêu của các hoạt động quét cổng hoặc thăm dò dịch vụ.\n*   **Dịch vụ VPN:** Các bản ghi `charon` cho thấy các nỗ lực kết nối từ các IP bên ngoài không rõ ràng, có thể là dấu hiệu của các hoạt động thăm dò nhằ
+m khai thác dịch vụ VPN.\n\n## 4. Đánh giá Hiệu quả Phòng thủ\n\n*   **Tường lửa:** Đang hoạt động hiệu quả trong việc *chặn* các lưu lượng độc hại như đã ghi nhận. Tuy nhiên, khối lượng công việc quá lớn cho
+ thấy hệ thống đang liên tục phải đối phó với các mối đe dọa tích cực và dai dẳng. Hiệu quả phòng thủ ở đây được đánh giá là *phản ứng*, chưa thực sự ngăn chặn triệt để nguồn gốc của vấn đề.\n*   **DHCP:** Dị
+ch vụ cấp phát IP hoạt động **xuất sắc**, đảm bảo tính sẵn sàng và ổn định cho toàn bộ thiết bị trong mạng.\n*   **VPN:** Khả năng thiết lập và tái tạo khóa VPN được ghi nhận là sử dụng các thuật toán mã hóa
+mạnh, cho thấy khía cạnh kỹ thuật của VPN là ổn. Tuy nhiên, việc có các nỗ lực kết nối thất bại và không xác định cho thấy khía cạnh quản lý truy cập và xác thực cần được xem xét kỹ lưỡng.\n*   **SSH Guard:**
+ Đang hoạt động, nhưng không có dấu hiệu ghi nhận các cuộc tấn công SSH quy mô lớn trong giai đoạn này.\n\n## 5. Kiến nghị Ưu tiên (Action Plan)\n\nDựa trên tình hình hiện tại, các hành động sau đây cần được
+ưu tiên triển khai:\n\n**Ưu tiên Cao (Cần làm ngay):**\n\n*   **Điều tra khẩn cấp IP `192.168.9.123`:** Xác định ngay thiết bị này. Tiến hành quét mã độc, kiểm tra cấu hình, và cô lập thiết bị khỏi mạng nếu p
+hát hiện dấu hiệu bất thường hoặc hành vi độc hại. Đây là mối đe dọa nội bộ tiềm ẩn.\n*   **Tinh chỉnh quy tắc Tường lửa:** Chặn triệt để lưu lượng UDP/44, UDP/8610 và TCP/7000 từ các nguồn không xác định hoặ
+c không đáng tin cậy. Đặc biệt, xem xét quy tắc chặt chẽ hơn cho lưu lượng từ `192.168.9.123` nếu không có lý do hợp lệ.\n\n**Ưu tiên Trung bình (Lên kế hoạch):**\n\n*   **Kiểm toán & Củng cố Bảo mật VPN:** R
+à soát tất cả các kết nối VPN, xác minh tính hợp lệ của các kết nối đã thiết lập và các nỗ lực kết nối thất bại. Triển khai xác thực đa yếu tố (MFA) cho quyền truy cập VPN nếu chưa có.\n*   **Thiết lập Cảnh b
+áo Tự động:** Cấu hình hệ thống giám sát để đưa ra cảnh báo ngay lập tức khi phát hiện các mẫu log tương tự (ví dụ: số lượng lớn gói tin bị chặn từ một IP, nỗ lực kết nối VPN thất bại liên tục).\n\n**Ưu tiên
+Thấp (Cải thiện dài hạn):**\n\n*   **Triển khai SIEM:** Xem xét đầu tư vào một hệ thống Quản lý Thông tin và Sự kiện Bảo mật (SIEM) để tập trung hóa, tương quan và phân tích log từ tất cả các nguồn, giúp phát
+ hiện các mối đe dọa phức tạp hơn.\n*   **Đánh giá Bảo mật Định kỳ:** Lên kế hoạch thực hiện đánh giá lỗ hổng và kiểm thử xâm nhập định kỳ trên toàn bộ hạ tầng.\n\n---\nHành động quyết đoán và kịp thời dựa tr
+ên các kiến nghị này là cần thiết để đảm bảo an ninh và sự ổn định lâu dài cho hệ thống của chúng ta.",
+    "source_reports": [
+        "/home/novaon/AI-Log-Analyzer/backend/reports/Host_Pfsense_TK/pfsense_tk_tonghop/2025-11-27/22-02-47.json",
+        "/home/novaon/AI-Log-Analyzer/backend/reports/Host_Pfsense_TK/pfsense_tk_tonghop/2025-11-28/00-05-13.json",
+        "/home/novaon/AI-Log-Analyzer/backend/reports/Host_Pfsense_TK/pfsense_tk_tonghop/2025-11-28/02-09-03.json"
+    ],
+    "stage_index": 2,
+    "report_type": "pfsense_TK_final"
+}novaon@system-ai-agent:~/AI-Log-Analyzer/backend/reports/Host_Pfsense_TK$

@@ -1,24 +1,24 @@
 import React from 'react';
 import {
-  Table,
-  Thead,
-  Tbody,
-  Tr,
-  Th,
-  Td,
-  Badge,
-  Menu,
-  MenuButton,
-  MenuList,
-  MenuItem,
-  IconButton
+    Table,
+    Thead,
+    Tbody,
+    Tr,
+    Th,
+    Td,
+    Badge,
+    Menu,
+    MenuButton,
+    MenuList,
+    MenuItem,
+    IconButton
 
 } from '@chakra-ui/react';
-import { 
-    ViewIcon, 
-    DownloadIcon, 
-    DeleteIcon, 
-    EmailIcon 
+import {
+    ViewIcon,
+    DownloadIcon,
+    DeleteIcon,
+    EmailIcon
 } from '@chakra-ui/icons';
 import { useLanguage } from '../../context/LanguageContext';
 
@@ -30,9 +30,16 @@ const ThreeDotsIcon = (props) => (
 
 const ReportsTable = ({ reports, onViewRaw, onViewTemplate, onDownload, onDelete }) => {
     const { t } = useLanguage();
-    
-    const getStatusBadge = (stats) => {
-        const isError = !stats || Object.keys(stats).length === 0 || Object.values(stats).includes('N/A');
+
+    const getStatusBadge = (report) => {
+        const stats = report.summary_stats;
+        const details = report.analysis_details_markdown || "";
+
+        const isWorkerFailed = details.includes("Worker Failed") || details.includes("Fatal Gemini Error");
+        const isStatsEmpty = !stats || Object.keys(stats).length === 0 || Object.values(stats).includes('N/A');
+
+        const isError = isWorkerFailed || isStatsEmpty;
+
         return (
             <Badge colorScheme={isError ? 'red' : 'green'} variant="subtle" fontWeight="normal" px={2} py={1} borderRadius="full">
                 {isError ? t('reportError') : t('reportSuccess')}
@@ -65,14 +72,14 @@ const ReportsTable = ({ reports, onViewRaw, onViewTemplate, onDownload, onDelete
                                 {new Date(report.generated_time).toLocaleString()}
                             </Td>
                             <Td>
-                                {getStatusBadge(report.summary_stats)}
+                                {getStatusBadge(report)}
                             </Td>
                             <Td textAlign="right">
                                 <Menu>
-                                    <MenuButton 
-                                        as={IconButton} 
-                                        icon={<ThreeDotsIcon style={{ width: '20px', height: '20px' }} />} 
-                                        variant="ghost" 
+                                    <MenuButton
+                                        as={IconButton}
+                                        icon={<ThreeDotsIcon style={{ width: '20px', height: '20px' }} />}
+                                        variant="ghost"
                                         size="sm"
                                         aria-label="Options"
                                     />

@@ -587,6 +587,16 @@ def run_pipeline_stage_n(host_config, host_section, current_stage_idx, stage_con
                 email_service.send_email(host_section, email_subject, body, smtp, recipients, diag, reports_to_process, logo_path=logo_path)
             except Exception as e: logging.error(f"Email error {stage_name}: {e}")
 
+
+    # Mark processed files to prevent infinite loop
+    for r_path in reports_to_process:
+        try:
+            new_path = r_path + ".processed"
+            os.rename(r_path, new_path)
+            logging.info(f"[{host_section}] Marked processed: {os.path.basename(r_path)}")
+        except Exception as e:
+            logging.warning(f"[{host_section}] Failed to mark processed {r_path}: {e}")
+
     return True
 
 def process_host_pipeline(host_config, host_section, system_settings, test_mode=False):
