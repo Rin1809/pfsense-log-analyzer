@@ -272,6 +272,9 @@ def run_pipeline_stage_0(host_config, host_section, stage_config, main_raw_api_k
 
     if not successful_results:
         logging.error(f"[{host_section}] ALL Workers failed. Aborting pipeline.")
+        # // FIX: Advance timestamp even if failed to prevent infinite loop on bad data
+        state_manager.save_last_run_timestamp(candidate_timestamp, host_section, test_mode)
+        logging.warning(f"[{host_section}] !!! FORCE ADVANCE TIMESTAMP to {candidate_timestamp} to skip bad log chunk !!!")
         return False
 
     # --- REDUCE STEP LOGIC ---
