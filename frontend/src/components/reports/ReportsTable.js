@@ -31,21 +31,29 @@ const ThreeDotsIcon = (props) => (
 const ReportsTable = ({ reports, onViewRaw, onViewTemplate, onDownload, onDelete }) => {
     const { t } = useLanguage();
 
-    const getStatusBadge = (report) => {
-        const stats = report.summary_stats;
-        const details = report.analysis_details_markdown || "";
+    // Optimize: Pre-calculate derived data to avoid expensive checks in the render loop
+    const processedReports = React.useMemo(() => {
+        if (!reports || !Array.isArray(reports)) return [];
 
-        const isWorkerFailed = details.includes("Worker Failed") || details.includes("Fatal Gemini Error");
-        const isStatsEmpty = !stats || Object.keys(stats).length === 0 || Object.values(stats).includes('N/A');
+        return reports.map(report => {
+            const stats = report.summary_stats || {};
+            const details = report.analysis_details_markdown || ""; // Defensive: default to string
 
-        const isError = isWorkerFailed || isStatsEmpty;
+            const isWorkerFailed = details.includes("Worker Failed") || details.includes("Fatal Gemini Error");
+            // Check if stats are empty/invalid. 
+            // Note: explicit check for 'N/A' might be needed depending on backend
+            const isStatsEmpty = Object.keys(stats).length === 0 || Object.values(stats).includes('N/A');
+            const isError = isWorkerFailed || isStatsEmpty;
 
-        return (
-            <Badge colorScheme={isError ? 'red' : 'green'} variant="subtle" fontWeight="normal" px={2} py={1} borderRadius="full">
-                {isError ? t('reportError') : t('reportSuccess')}
-            </Badge>
-        );
-    };
+            return {
+                ...report,
+                formattedDate: new Date(report.generated_time).toLocaleString(), // Format once
+                isError,
+                badgeColor: isError ? 'red' : 'green',
+                badgeTextKey: isError ? 'reportError' : 'reportSuccess'
+            };
+        });
+    }, [reports]);
 
     return (
         <Table variant="simple">
@@ -59,8 +67,8 @@ const ReportsTable = ({ reports, onViewRaw, onViewTemplate, onDownload, onDelete
                 </Tr>
             </Thead>
             <Tbody>
-                {reports.length > 0 ? (
-                    reports.map((report) => (
+                {processedReports.length > 0 ? (
+                    processedReports.map((report) => (
                         <Tr key={report.path}>
                             <Td fontWeight="medium">{report.hostname}</Td>
                             <Td>
@@ -69,10 +77,18 @@ const ReportsTable = ({ reports, onViewRaw, onViewTemplate, onDownload, onDelete
                                 </Badge>
                             </Td>
                             <Td fontSize="sm" color="gray.500">
-                                {new Date(report.generated_time).toLocaleString()}
+                                {report.formattedDate}
                             </Td>
                             <Td>
-                                {getStatusBadge(report)}
+                                <Badge
+                                    colorScheme={report.badgeColor}
+                                    variant="subtle"
+                                    fontWeight="normal"
+                                    px={2} py={1}
+                                    borderRadius="full"
+                                >
+                                    {t(report.badgeTextKey)}
+                                </Badge>
                             </Td>
                             <Td textAlign="right">
                                 <Menu>

@@ -149,7 +149,14 @@ def run_pipeline_stage_0(host_config, host_section, stage_config, main_raw_api_k
     
     logging.info(f"[{host_section}] Using Chunk Size: {chunk_size}")
     
-    report_dir = system_settings.get('System', 'report_directory', fallback='reports')
+    
+    raw_report_dir = system_settings.get('System', 'report_directory', fallback='reports')
+    # // FIX: Detect linux path on windows and fallback to relative
+    if os.name == 'nt' and (raw_report_dir.startswith('/') or raw_report_dir.startswith('\\')):
+        report_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'reports')
+    else:
+        report_dir = raw_report_dir
+        
     prompt_dir = system_settings.get('System', 'prompt_directory', fallback='prompts')
     logo_path = system_settings.get('System', 'logo_path', fallback=None)
 
@@ -420,7 +427,11 @@ def run_pipeline_stage_n(host_config, host_section, current_stage_idx, stage_con
     
     logging.info(f"[{host_section}] >>> Checking trigger for Stage {current_stage_idx} ({stage_name}). Need {threshold} reports.")
 
-    report_dir = system_settings.get('System', 'report_directory', fallback='reports')
+    raw_report_dir = system_settings.get('System', 'report_directory', fallback='reports')
+    if os.name == 'nt' and (raw_report_dir.startswith('/') or raw_report_dir.startswith('\\')):
+        report_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'reports')
+    else:
+        report_dir = raw_report_dir
     host_report_dir = os.path.join(report_dir, host_section)
     
     prev_stage_name = prev_stage_config.get('name', f'Stage_{current_stage_idx-1}')
@@ -500,20 +511,47 @@ def run_pipeline_stage_n(host_config, host_section, current_stage_idx, stage_con
     final_key_raw = stage_key_raw if stage_key_raw and stage_key_raw.strip() else main_raw_api_key
     final_api_key, key_alias = resolve_api_key_with_alias(final_key_raw, system_settings)
 
-    result_raw = gemini_analyzer.analyze_with_gemini(
-        host_section, content_to_analyze, bonus_context_text, 
-        final_api_key, prompt_file, model_name,
-        key_alias=key_alias, test_mode=test_mode,
-        context_file_paths=binary_files
-    )
-    
+    # // RETRY LOGIC for STAGE N
+    result_raw = "Fatal: Init"
+    max_retries_n = 2
+    for attempt in range(max_retries_n):
+        try:
+            result_raw = gemini_analyzer.analyze_with_gemini(
+                host_section, content_to_analyze, bonus_context_text, 
+                final_api_key, prompt_file, model_name,
+                key_alias=key_alias, test_mode=test_mode,
+                context_file_paths=binary_files
+            )
+            if "Gemini blocked response" in result_raw or "Fatal Gemini Error" in result_raw:
+                raise Exception(f"AI Blocked/Error: {result_raw}")
+            break
+        except Exception as e:
+            logging.warning(f"[{host_section}] Stage {current_stage_idx} attempt {attempt+1} failed: {e}")
+            time.sleep(2)
+
     if "Gemini blocked response" in result_raw or "Fatal Gemini Error" in result_raw:
-        logging.error(f"[{host_section}] Stage {current_stage_idx} AI Failed. Not saving.")
+        logging.error(f"[{host_section}] Stage {current_stage_idx} AI Failed FINAL. Marking sources as failed.")
+        # // CRITICAL FIX: Mark source reports as failed to prevent INFINITE LOOP
+        for r_path in reports_to_process:
+             try:
+                os.rename(r_path, r_path + ".ai_failed")
+             except: pass
         return False
 
     stats = utils.extract_json_from_text(result_raw)
     result_md = re.sub(r'```json\s*.*?\s*```', '', result_raw, flags=re.DOTALL | re.IGNORECASE).strip()
     
+    # // Preserve raw log count from sources if available (summing them up)
+    total_raw_logs = 0
+    for path in reports_to_process:
+        try:
+             with open(path, 'r', encoding='utf-8') as f:
+                 d = json.load(f)
+                 # Only count if it's from recent stages to avoid double counting too much, 
+                 # but generally we want to know how many raw logs went into this summary.
+                 total_raw_logs += d.get('raw_log_count', 0)
+        except: pass
+
     report_data = {
         "hostname": hostname, 
         "analysis_start_time": start_time.isoformat() if start_time else "N/A",
@@ -523,7 +561,8 @@ def run_pipeline_stage_n(host_config, host_section, current_stage_idx, stage_con
         "analysis_details_markdown": result_md,
         "source_reports": reports_to_process,
         "stage_index": current_stage_idx,
-        "report_type": stage_name
+        "report_type": stage_name,
+        "raw_log_count": total_raw_logs # Pass this through
     }
     
     report_generator.save_structured_report(host_section, report_data, timezone, report_dir, stage_name)
@@ -619,12 +658,18 @@ def process_host_pipeline(host_config, host_section, system_settings, test_mode=
         last_run = state_manager.get_last_cycle_run_timestamp(host_section, test_mode)
         
         if not last_run or (now - last_run).total_seconds() >= run_interval:
+            t0 = datetime.now()
             success = run_pipeline_stage_0(host_config, host_section, stage0_config, main_raw_api_key, system_settings, test_mode)
+            dur = (datetime.now() - t0).total_seconds()
+            logging.info(f"[{host_section}] Stage 0 Finished in {dur:.2f}s. Success: {success}")
+            
             if success:
                 state_manager.save_last_cycle_run_timestamp(now, host_section, test_mode)
                 if len(pipeline) > 1:
                     curr_buff = state_manager.get_stage_buffer_count(host_section, 1, test_mode)
-                    state_manager.save_stage_buffer_count(host_section, 1, curr_buff + 1, test_mode)
+                    new_buff = curr_buff + 1
+                    state_manager.save_stage_buffer_count(host_section, 1, new_buff, test_mode)
+                    logging.info(f"[{host_section}] Stage 1 Buffer Increased: {curr_buff} -> {new_buff}")
 
     total_stages = len(pipeline)
     for i in range(1, total_stages):
